@@ -14,3 +14,10 @@ output:
 
 #This is a Test Knit
 
+```r
+x = rnorm(100)
+y = rnorm(100)
+plot(x,y)
+```
+
+![](HousingDataProject_files/figure-html/unnamed-chunk-1-1.png)<!-- -->

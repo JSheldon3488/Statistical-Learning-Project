@@ -13,14 +13,12 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(DT)
 ```
 
-#This is a Test Knit
-```{r}
-x = rnorm(100)
-y = rnorm(100)
-plot(x,y)
+#Display of the Data
+```{r echo = FALSE}
+trainData = read.csv("train.csv")
+testData = read.csv("test.csv")
+datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
 ```
-#Is this the right project location?
-
-Does this keep the text?

@@ -8,14 +8,19 @@ output:
     toc_float: true
     theme: united
     highlight: tango
+    keep_tex: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+#This is a Test Knit
 ```{r}
-x = rnorm(1000)
-y = rnorm(1000)
+x = rnorm(100)
+y = rnorm(100)
 plot(x,y)
 ```
+#Is this the right project location?
+
+Does this keep the text?

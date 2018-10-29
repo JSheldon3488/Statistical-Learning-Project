@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-x = rnorm(100)
-y = rnorm(100)
+x = rnorm(1000)
+y = rnorm(1000)
 plot(x,y)
 ```

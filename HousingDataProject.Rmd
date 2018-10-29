@@ -1,6 +1,6 @@
 ---
 title: "Housing Data Project"
-author: "Justin Sheldon"
+author: "Justin Sheldon, "
 date: "October 24, 2018"
 output:
   html_document:
@@ -15,6 +15,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 library(DT)
 ```
+#Introduction
+The goal and main focus of our project is to learn more about, and get experience applying all the different concepts we covered in class. The main relationship we will be interested in is the relationship between “Sale Price” and the rest of the predictors in the data. We will be doing both inference and making predictions. We plan to build both parametric and nonparametric methods and see what works best based on test set error rate. The dataset we will be using is the House Prices dataset from www.kaggle.com. We are going to attempt to use every statistical learning method we have learned in class and discuss the pros/cons of each method in relation to our data set.
+
 
 #Display of the Data
 ```{r echo = FALSE}

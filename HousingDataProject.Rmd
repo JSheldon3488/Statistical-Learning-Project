@@ -1,6 +1,6 @@
 ---
 title: "Housing Data Project"
-author: "Justin Sheldon, "
+author: "Justin Sheldon, Jeremy Swiatek jeremy.swiatek@gmail.com"
 date: "October 24, 2018"
 output:
   html_document:
@@ -15,11 +15,18 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 library(DT)
 ```
+#Abstract
+The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
+
 #Introduction
-The goal and main focus of our project is to learn more about, and get experience applying all the different concepts we covered in class. The main relationship we will be interested in is the relationship between “Sale Price” and the rest of the predictors in the data. We will be doing both inference and making predictions. We plan to build both parametric and nonparametric methods and see what works best based on test set error rate. The dataset we will be using is the House Prices dataset from www.kaggle.com. We are going to attempt to use every statistical learning method we have learned in class and discuss the pros/cons of each method in relation to our data set.
+Location, Location, Location, is that all you really need to know about housing to make an informed decision on the value of a house? Being an informed consumer is always a good idea but especially on the largest purchase you will probably make in your lifetime. The goal of this project is to be able to predict the sale price of a house with a reasonably good accuracy. Just as important, if not more so, we also want to gain a deeper understanding of the relationship between different factors and the sale price of a house.
+
+Another goal of this project is to learn more about and get experience with the different statistical learning methods we have covered in class this semester. We plan to try out a lot of the methods we covered in class this semester and discuss the strengths and weaknesses of each method as it pertains to our data set. Therefore this project will be broken up into sections for each of the different methods. There is a table of contents to the right that you can click to jump to any section you want to look at. We will try to keep each section as self contained as possible.
 
 
-#Display of the Data
+#The Data
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
+
 ```{r echo = FALSE}
 trainData = read.csv("train.csv")
 testData = read.csv("test.csv")

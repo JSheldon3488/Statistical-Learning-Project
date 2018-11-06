@@ -25,10 +25,29 @@ Another goal of this project is to learn more about and get experience with the 
 
 
 #The Data
-The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. There are 1460 observations in total in the training Data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
 
 ```{r echo = FALSE}
 trainData = read.csv("train.csv")
 testData = read.csv("test.csv")
 datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
 ```
+
+##Cleaning the Data
+Upon further inspection of the data we noticed we had some variables that were causing us trouble. For now we have decided to just remove the variables with missing Data. This is currecntly 19 variables out of 79 which is not ideal but removing them now allows us to move forward and work on building models. We plan to dive deeper into the variables with missing data and see if we can infer what NA really means and keep some of the variables in the data. Also for some of the data with only a few missing values we might just input values for them by assigning the mean of that variable or something like that. Another thing we are going to look at and consider is if some of these variables are highly correlated with other variables that dont have missing values then it is probably just fine to remove them because we will not be missing out on the information.
+
+```{r, Analyze The NAs, echo= FALSE, comment = ""}
+NAVariables <- which(colSums(is.na(trainData)) > 0)
+sort(colSums(sapply(trainData[NAVariables], is.na)), decreasing = TRUE)
+```
+
+```{r, Remove Missing Data, echo=FALSE}
+train_noNA = trainData[ , colSums(is.na(trainData)) == 0]
+```
+
+
+#Multiple Linear Regression
+```{r echo=FALSE}
+baseModel = glm(SalePrice ~ ., data = train_noNA)
+```
+

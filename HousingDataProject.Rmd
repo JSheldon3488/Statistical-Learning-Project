@@ -47,7 +47,16 @@ train_noNA = trainData[ , colSums(is.na(trainData)) == 0]
 
 
 #Multiple Linear Regression
-```{r echo=FALSE}
+```{r echo=FALSE, include=FALSE}
 baseModel = glm(SalePrice ~ ., data = train_noNA)
+summary(aov(baseModel))
 ```
+By adding the anova model we can look at how each variable does regardless of the number of classes that it has. Like in the MSZoning variable it doesn't give us the effect of each type of MS zoning but the variable as a whole. By looking at the total effect of the variables we can see which variables are most important and use those in our model while we exclude some of the variables with p-values lower than .05.
+Variables that are not statistically significant: ExterCond, Heating, CentralAir, BsmtFullBath, BsmtHalfBath,FullBath,  HalfBath,  TotRmsAbvGrd, PavedDrive, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, ScreenPorch, MiscVal, MoSold, YrSold, SaleCondition 
 
+##Model Residuals
+```{r echo=FALSE}
+par(mfrow= c(2,2))
+plot(baseModel)
+```
+We plot the original data with all the variables so that we could check the assumptions of normal variance, linearity, and independence. The two more informative plots are the Residuals vs Fitted and the Normal QQ plot. The Residuals vs Fitted graph showed that there is a cluster of residuals around the center and as we get into higher order terms they begin to spread outward which is not the random spread we should have gotten to get a perfect model. Also the same problem occurs in the QQ plot because at both tail ends the points deviate from linearity.

@@ -1,0 +1,62 @@
+---
+title: "Housing Data Project"
+author: "Justin Sheldon, Jeremy Swiatek jeremy.swiatek@gmail.com"
+date: "October 24, 2018"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    keep_tex: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DT)
+```
+#Abstract
+The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
+
+#Introduction
+Location, Location, Location, is that all you really need to know about housing to make an informed decision on the value of a house? Being an informed consumer is always a good idea but especially on the largest purchase you will probably make in your lifetime. The goal of this project is to be able to predict the sale price of a house with a reasonably good accuracy. Just as important, if not more so, we also want to gain a deeper understanding of the relationship between different factors and the sale price of a house.
+
+Another goal of this project is to learn more about and get experience with the different statistical learning methods we have covered in class this semester. We plan to try out a lot of the methods we covered in class this semester and discuss the strengths and weaknesses of each method as it pertains to our data set. Therefore this project will be broken up into sections for each of the different methods. There is a table of contents to the right that you can click to jump to any section you want to look at. We will try to keep each section as self contained as possible.
+
+
+#The Data
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. There are 1460 observations in total in the training Data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
+
+```{r echo = FALSE}
+trainData = read.csv("train.csv")
+testData = read.csv("test.csv")
+datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
+```
+
+##Cleaning the Data
+Upon further inspection of the data we noticed we had some variables that were causing us trouble. For now we have decided to just remove the variables with missing Data. This is currecntly 19 variables out of 79 which is not ideal but removing them now allows us to move forward and work on building models. We plan to dive deeper into the variables with missing data and see if we can infer what NA really means and keep some of the variables in the data. Also for some of the data with only a few missing values we might just input values for them by assigning the mean of that variable or something like that. Another thing we are going to look at and consider is if some of these variables are highly correlated with other variables that dont have missing values then it is probably just fine to remove them because we will not be missing out on the information.
+
+```{r, Analyze The NAs, echo= FALSE, comment = ""}
+NAVariables <- which(colSums(is.na(trainData)) > 0)
+sort(colSums(sapply(trainData[NAVariables], is.na)), decreasing = TRUE)
+```
+
+```{r, Remove Missing Data, echo=FALSE}
+train_noNA = trainData[ , colSums(is.na(trainData)) == 0]
+```
+
+
+#Multiple Linear Regression
+```{r echo=FALSE, include=FALSE}
+baseModel = glm(SalePrice ~ ., data = train_noNA)
+summary(aov(baseModel))
+```
+By adding the anova model we can look at how each variable does regardless of the number of classes that it has. Like in the MSZoning variable it doesn't give us the effect of each type of MS zoning but the variable as a whole. By looking at the total effect of the variables we can see which variables are most important and use those in our model while we exclude some of the variables with p-values lower than .05.
+Variables that are not statistically significant: ExterCond, Heating, CentralAir, BsmtFullBath, BsmtHalfBath,FullBath,  HalfBath,  TotRmsAbvGrd, PavedDrive, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, ScreenPorch, MiscVal, MoSold, YrSold, SaleCondition 
+
+##Model Residuals
+```{r echo=FALSE}
+par(mfrow= c(2,2))
+plot(baseModel)
+```
+We plot the original data with all the variables so that we could check the assumptions of normal variance, linearity, and independence. The two more informative plots are the Residuals vs Fitted and the Normal QQ plot. The Residuals vs Fitted graph showed that there is a cluster of residuals around the center and as we get into higher order terms they begin to spread outward which is not the random spread we should have gotten to get a perfect model. Also the same problem occurs in the QQ plot because at both tail ends the points deviate from linearity.

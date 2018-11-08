@@ -60,3 +60,16 @@ par(mfrow= c(2,2))
 plot(baseModel)
 ```
 We plot the original data with all the variables so that we could check the assumptions of normal variance, linearity, and independence. The two more informative plots are the Residuals vs Fitted and the Normal QQ plot. The Residuals vs Fitted graph showed that there is a cluster of residuals around the center and as we get into higher order terms they begin to spread outward which is not the random spread we should have gotten to get a perfect model. Also the same problem occurs in the QQ plot because at both tail ends the points deviate from linearity.
+
+##Model Outliers
+```{r echo=FALSE}
+library(car)
+outlierTest(baseModel)
+```
+
+After looking at the residual plot we can see that there are 10 outliers in the data that may be influencing the data. The points influncing the data could strech our results giving us poor residual plots, inflatted means, and possibly not accurate intercepts and slopes. Since the very conservative Bonferonni p-value is giving us extremely samll values for these outlier we know they can be removed to improve the results.
+
+
+
+
+

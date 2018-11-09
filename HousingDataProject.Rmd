@@ -1,6 +1,6 @@
 ---
 title: "Housing Data Project"
-author: "Justin Sheldon, Jeremy Swiatek jeremy.swiatek@gmail.com"
+author: "Justin Sheldon, Jeremy Swiatek"
 date: "October 24, 2018"
 output:
   html_document:
@@ -51,12 +51,12 @@ train_noNA = trainData[ , colSums(is.na(trainData)) == 0]
 baseModel = glm(SalePrice ~ ., data = train_noNA)
 summary(aov(baseModel))
 ```
-By adding the anova model we can look at how each variable does regardless of the number of classes that it has. Like in the MSZoning variable it doesn't give us the effect of each type of MS zoning but the variable as a whole. By looking at the total effect of the variables we can see which variables are most important and use those in our model while we exclude some of the variables with p-values lower than .05.
+By adding the anova model we can look at how each variables main effect does regardless of the number of classes that it has. Like in the MSZoning variable it doesn't give us the effect of each type of MS zoning but the variable as a whole. By looking at the total effect of the variables we can see which variables are most important and use those in our model while we exclude some of the variables with p-values lower than .05.
 Variables that are not statistically significant: ExterCond, Heating, CentralAir, BsmtFullBath, BsmtHalfBath,FullBath,  HalfBath,  TotRmsAbvGrd, PavedDrive, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, ScreenPorch, MiscVal, MoSold, YrSold, SaleCondition 
 
 ##Model Residuals
 ```{r echo=FALSE}
-par(mfrow= c(2,2))
+#par(mfrow= c(2,2))
 plot(baseModel)
 ```
 We plot the original data with all the variables so that we could check the assumptions of normal variance, linearity, and independence. The two more informative plots are the Residuals vs Fitted and the Normal QQ plot. The Residuals vs Fitted graph showed that there is a cluster of residuals around the center and as we get into higher order terms they begin to spread outward which is not the random spread we should have gotten to get a perfect model. Also the same problem occurs in the QQ plot because at both tail ends the points deviate from linearity.
@@ -69,7 +69,11 @@ outlierTest(baseModel)
 
 After looking at the residual plot we can see that there are 10 outliers in the data that may be influencing the data. The points influncing the data could strech our results giving us poor residual plots, inflatted means, and possibly not accurate intercepts and slopes. Since the very conservative Bonferonni p-value is giving us extremely samll values for these outlier we know they can be removed to improve the results.
 
-
-
-
-
+##New Model without Outliers
+```{r echo=FALSE}
+NoOutliers <- train_noNA[ -c(186, 524, 582, 692, 804, 826, 899, 1047, 1170, 1183, 1325), ]
+NoOutliers_Model = glm(SalePrice ~., data = NoOutliers)
+#par(mfrow= c(2,2))
+plot(NoOutliers_Model)
+```
+By removing the outliers we had in the orignial data it gave us a better random spread of residuals in the resdiual vs. fitted plot. Although the QQ plot still has tails the deviate from normality it is clear that they aren't as extreme as they were before. Without the outliers streaching the data we can get more accurate answers when asking model questions.

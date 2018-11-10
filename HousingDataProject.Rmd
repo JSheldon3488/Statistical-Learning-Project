@@ -14,6 +14,9 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(DT)
+library(boot)
+library(car)
+library(plyr)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -28,52 +31,223 @@ Another goal of this project is to learn more about and get experience with the 
 The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. There are 1460 observations in total in the training Data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
 
 ```{r echo = FALSE}
-trainData = read.csv("train.csv")
-testData = read.csv("test.csv")
-datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
+trainData = read.csv("train.csv", stringsAsFactors = FALSE)
+testData = read.csv("test.csv", stringsAsFactors = FALSE)
+#datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
 ```
 
-##Cleaning the Data
-Upon further inspection of the data we noticed we had some variables that were causing us trouble. For now we have decided to just remove the variables with missing Data. This is currecntly 19 variables out of 79 which is not ideal but removing them now allows us to move forward and work on building models. We plan to dive deeper into the variables with missing data and see if we can infer what NA really means and keep some of the variables in the data. Also for some of the data with only a few missing values we might just input values for them by assigning the mean of that variable or something like that. Another thing we are going to look at and consider is if some of these variables are highly correlated with other variables that dont have missing values then it is probably just fine to remove them because we will not be missing out on the information.
+##  Cleaning the Data
+Upon further inspection of the data we noticed we had some variables that were causing us trouble. There are 19 variables with missing data. For some of the variables NA's really meant "None" so we fixed those by converting NA to "None". There was also a couple of observations that had one missing value for a given variable and we just fixed that by predicting the mean/mode of that variable for that observation. Any other additional modification is listed below along with the reason why we choose that modification.
 
-```{r, Analyze The NAs, echo= FALSE, comment = ""}
+* LotFrontage: Linear Feet of street connected to property. This one was a tough decision. It's missing 259/1460 approximately 18% of the data for this variable but we didnt want to lose the variable entirely. We decided to fill in the NA's with the mean value of the variable.
+* GarageYrBlt: Garage Year Built. We replaced the NA's with the Year the house was built as long as it actualy had a garage. We expect GarageYrBlt and YearBuilt to be highly correlated and eventually one will probably have to be removed from the model anyways.
+* MiscFeature: Miscellaneous feature. This variable was essentially worthless. Almost all of the data was missing and the data that did exist was 'tennis court' and 'other'. We removed this variable.
+
+
+```{r, Finding the NAs, include=  FALSE, comment = ""}
 NAVariables <- which(colSums(is.na(trainData)) > 0)
 sort(colSums(sapply(trainData[NAVariables], is.na)), decreasing = TRUE)
 ```
 
-```{r, Remove Missing Data, echo=FALSE}
-train_noNA = trainData[ , colSums(is.na(trainData)) == 0]
+```{r, Fixing NA Variables, echo=FALSE, include=FALSE}
+#Fixing Pool QC
+trainData$PoolQC[is.na(trainData$PoolQC)] = 'None'
+Qualities = c('None' = 0, 'Po' = 1, 'Fa' = 2, 'TA' = 3, 'Gd' = 4, 'Ex' = 5)
+trainData$PoolQC = as.integer(revalue(trainData$PoolQC, Qualities))
+
+#Fixing Alley
+trainData$Alley[is.na(trainData$Alley)] = 'None'
+trainData$Alley = as.factor(trainData$Alley)
+
+#Fixing Fence
+trainData$Fence[is.na(trainData$Fence)] = 'None'
+trainData$Fence = as.factor(trainData$Fence)
+
+#Fixing Fireplace
+trainData$FireplaceQu[is.na(trainData$FireplaceQu)] = 'None'
+trainData$FireplaceQu = as.integer(revalue(trainData$FireplaceQu, Qualities))
+
+#Fixing LotFrontage and other lot variables
+for (i in 1:nrow(trainData)){
+        if(is.na(trainData$LotFrontage[i])){
+               trainData$LotFrontage[i] = as.integer(mean(trainData$LotFrontage, na.rm = TRUE))
+        }
+}
+trainData$LotShape = as.integer(revalue(trainData$LotShape, c('IR3'=0, 'IR2'=1, 'IR1'=2, 'Reg'=3)))
+trainData$LotConfig = as.factor(trainData$LotConfig)
+
+#Fixing Garage variables
+#Year Built
+trainData$GarageYrBlt[is.na(trainData$GarageYrBlt)] = trainData$YearBuilt[is.na(trainData$GarageYrBlt)]
+#Garage Type
+trainData$GarageType[is.na(trainData$GarageType)] = 'None'
+trainData$GarageType = as.factor(trainData$GarageType)
+#Garage Finish
+trainData$GarageFinish[is.na(trainData$GarageFinish)] = 'None'
+FinishLevels = c('None'=0, 'Unf'=1, 'RFn'=2, 'Fin'=3)
+trainData$GarageFinish<-as.integer(revalue(trainData$GarageFinish, FinishLevels))
+#Garage Quality
+trainData$GarageQual[is.na(trainData$GarageQual)] = 'None'
+trainData$GarageQual = as.integer(revalue(trainData$GarageQual, Qualities))
+#Garage Condition
+trainData$GarageCond[is.na(trainData$GarageCond)] = 'None'
+trainData$GarageCond = as.integer(revalue(trainData$GarageCond, Qualities))
+
+#Fixing Basement Variables
+#Additional NA in these two observations
+trainData[!is.na(trainData$BsmtFinType1) & (is.na(trainData$BsmtCond)|is.na(trainData$BsmtQual)|is.na(trainData$BsmtExposure)|is.na(trainData$BsmtFinType2)), c('BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2')]
+#Predict Most common occurence to fix these two observations
+trainData$BsmtFinType2[333] = "Unf"
+trainData$BsmtExposure[949] = "No"
+#Basement Quality
+trainData$BsmtQual[is.na(trainData$BsmtQual)] = 'None'
+trainData$BsmtQual = as.integer(revalue(trainData$BsmtQual, Qualities))
+#Basement Condition
+trainData$BsmtCond[is.na(trainData$BsmtCond)] = 'None'
+trainData$BsmtCond = as.integer(revalue(trainData$BsmtCond, Qualities))
+#Basement Exposure
+trainData$BsmtExposure[is.na(trainData$BsmtExposure)] = 'None'
+trainData$BsmtExposure = as.factor(trainData$BsmtExposure)
+#Basement Finish Type 1
+trainData$BsmtFinType1[is.na(trainData$BsmtFinType1)] = 'None'
+trainData$BsmtFinType1 = as.factor(trainData$BsmtFinType1)
+#Basement Finish Type 2
+trainData$BsmtFinType2[is.na(trainData$BsmtFinType2)] = 'None'
+trainData$BsmtFinType2 = as.factor(trainData$BsmtFinType2)
+
+#Fixing Masonry Variables
+#Masonary Veneer Type
+trainData$MasVnrType[is.na(trainData$MasVnrType)] = 'None'
+trainData$MasVnrType = as.factor(trainData$MasVnrType)
+#Masonary Veneer Area
+trainData$MasVnrArea[is.na(trainData$MasVnrArea)] = 0
+
+#Fixing Electrical
+trainData$Electrical[is.na(trainData$Electrical)] = "SBrkr"
+trainData$Electrical = as.factor(trainData$Electrical)
+
+
+#Fixing MiscFeature (junk just remove)
+trainData = subset(trainData, select = -MiscFeature)
 ```
 
+```{r, Fixing Character Variables, echo=FALSE,include=FALSE}
+#Turning Char variables into factor variables
+trainData$MSZoning = as.factor(trainData$MSZoning)
+trainData$Street = as.factor(trainData$Street)
+trainData$LandContour = as.factor(trainData$LandContour)
+trainData$Neighborhood = as.factor(trainData$Neighborhood)
+trainData$Condition1 = as.factor(trainData$Condition1)
+trainData$BldgType = as.factor(trainData$BldgType)
+trainData$HouseStyle = as.factor(trainData$HouseStyle)
+trainData$RoofStyle = as.factor(trainData$RoofStyle)
+trainData$RoofMatl = as.factor(trainData$RoofMatl)
+trainData$Exterior1st = as.factor(trainData$Exterior1st)
+trainData$Exterior2nd = as.factor(trainData$Exterior2nd)
+trainData$Foundation = as.factor(trainData$Foundation)
+trainData$Heating = as.factor(trainData$Heating)
+trainData$SaleType = as.factor(trainData$SaleType)
+trainData$SaleCondition = as.factor(trainData$SaleCondition)
+
+
+#Turning Char Variables into Ordinal Numeric
+trainData$LandSlope = as.integer(revalue(trainData$LandSlope, c('Sev'=0, 'Mod'=1, 'Gtl'=2)))
+trainData$ExterQual = as.integer(revalue(trainData$ExterQual, Qualities))
+trainData$ExterCond = as.integer(revalue(trainData$ExterCond, Qualities))
+trainData$HeatingQC = as.integer(revalue(trainData$HeatingQC, Qualities))
+trainData$CentralAir = as.integer(revalue(trainData$CentralAir, c('N'=0, 'Y'=1)))
+trainData$KitchenQual = as.integer(revalue(trainData$KitchenQual, Qualities))
+trainData$Functional = as.integer(revalue(trainData$Functional, c('Sal'=0, 'Sev'=1, 'Maj2'=2, 'Maj1'=3, 'Mod'=4, 'Min2'=5, 'Min1'=6, 'Typ'=7)))
+trainData$PavedDrive = as.integer(revalue(trainData$PavedDrive, c('N'=0, 'P'=1, 'Y'=2)))
+
+
+#Variables We got Rid of
+trainData = subset(trainData, select = -Utilities)
+trainData = subset(trainData, select = -Condition2)
+#Not a part of the data just observation #
+trainData = subset(trainData, select = -Id)
+#Too Sparse < 1% of data not in same category
+trainData = subset(trainData, select = -RoofMatl)
+
+
+
+#Make sure Empty
+charVariables = names(trainData[,sapply(trainData, is.character)])
+charVariables
+```
 
 #Multiple Linear Regression
-```{r echo=FALSE, include=FALSE}
-baseModel = glm(SalePrice ~ ., data = train_noNA)
-summary(aov(baseModel))
-```
-By adding the anova model we can look at how each variables main effect does regardless of the number of classes that it has. Like in the MSZoning variable it doesn't give us the effect of each type of MS zoning but the variable as a whole. By looking at the total effect of the variables we can see which variables are most important and use those in our model while we exclude some of the variables with p-values lower than .05.
-Variables that are not statistically significant: ExterCond, Heating, CentralAir, BsmtFullBath, BsmtHalfBath,FullBath,  HalfBath,  TotRmsAbvGrd, PavedDrive, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, ScreenPorch, MiscVal, MoSold, YrSold, SaleCondition 
+The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 
 
-##Model Residuals
-```{r echo=FALSE}
-#par(mfrow= c(2,2))
+* 5 Fold Cross Valiation Error Rate: (waiting for clean data)
+* 10 Fold Cross Valiation Error Rate: (waiting for clean data)
+* Most Significant Parameters: 
+* Non-Significant Parameters: 
+
+```{r, Base Model, echo=FALSE, include=FALSE}
+baseModel = glm(SalePrice ~ ., data = trainData)
+summary(baseModel)
+```
+
+```{r, Cross Validation, comment="", include=FALSE, echo=FALSE}
+set.seed(4)
+cvTrainData = trainData
+cv.error10 = cv.glm(cvTrainData, baseModel, K=10)$delta[1]
+```
+
+##  Potential Problems
+
+####     Residual Plots
+From the Residual plots it appears as if a linear model may not be a good representation of the data. We plan to try out some Model selection and regularization methods and see if this pattern still exists. If so we will use non-linear methods.
+
+```{r, Model Residuals, echo=FALSE, include=FALSE}
+par(mfrow= c(2,2))
 plot(baseModel)
 ```
-We plot the original data with all the variables so that we could check the assumptions of normal variance, linearity, and independence. The two more informative plots are the Residuals vs Fitted and the Normal QQ plot. The Residuals vs Fitted graph showed that there is a cluster of residuals around the center and as we get into higher order terms they begin to spread outward which is not the random spread we should have gotten to get a perfect model. Also the same problem occurs in the QQ plot because at both tail ends the points deviate from linearity.
 
-##Model Outliers
-```{r echo=FALSE}
-library(car)
+####     Model Outliers
+After looking at the residual plot we noticed there are 10 outliers that may be influencing the model fit. The points influncing the data are listed below. We will keep an eye on these observations in future models and see if they continue to be a problem. We will deal with them later if we need to.
+```{r, Model Outliers, echo=FALSE, comment=""}
 outlierTest(baseModel)
 ```
 
-After looking at the residual plot we can see that there are 10 outliers in the data that may be influencing the data. The points influncing the data could strech our results giving us poor residual plots, inflatted means, and possibly not accurate intercepts and slopes. Since the very conservative Bonferonni p-value is giving us extremely samll values for these outlier we know they can be removed to improve the results.
 
-##New Model without Outliers
-```{r echo=FALSE}
-NoOutliers <- train_noNA[ -c(186, 524, 582, 692, 804, 826, 899, 1047, 1170, 1183, 1325), ]
-NoOutliers_Model = glm(SalePrice ~., data = NoOutliers)
-#par(mfrow= c(2,2))
-plot(NoOutliers_Model)
+
+#Model Selection and Regularization
+
+##Subset Selection
+####Forward Stepwise Selection
+```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
+
 ```
-By removing the outliers we had in the orignial data it gave us a better random spread of residuals in the resdiual vs. fitted plot. Although the QQ plot still has tails the deviate from normality and skews slightly right it is clear that they aren't as extreme as they were before. Without the outliers streaching the data we can get more accurate answers when asking questions and using this model.
+
+####Backwards Stepwise Selection
+```{r, Backwards Stepwise Selection, include=FALSE, echo=FALSE}
+
+```
+
+
+
+##Shrinkage Methods
+####Ridge Regression
+```{r, Ridge Regression, include=FALSE, echo=FALSE}
+
+```
+
+####Lasso Regression
+```{r, Lasso, include=FALSE, echo=FALSE}
+
+```
+
+
+
+##Dimension Reduction Methods
+####Principle Components Regression
+```{r, PCR, include=FALSE, echo=FALSE}
+
+```
+
+####Partial Least Squares
+```{r, PLS, include=FALSE, echo=FALSE}
+
+```

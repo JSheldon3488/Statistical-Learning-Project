@@ -6,6 +6,7 @@ output:
   html_document:
     toc: true
     toc_float: true
+    toc_depth: 3
     theme: united
     highlight: tango
     keep_tex: true
@@ -13,10 +14,10 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(DT)
 library(boot)
 library(car)
 library(plyr)
+library(dummies)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -28,21 +29,19 @@ Another goal of this project is to learn more about and get experience with the 
 
 
 #The Data
-The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. Below is a table of the training data. There are 1460 observations in total in the training Data. You can scroll right to explore the different variables and their corresponding values. You can also click in the box below each variable name to see the range of values and filter/sort the table if you would like. Some of the variable names are a little cryptic but there are 79 of them so we are not going to translate them all here. Later when we apply subset selection methods we will clarify the meaning of each variable in the reduced models.
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. There are 1460 observations in total in the training Data. We did a lot of data cleaning before building any models. Below is everything we did catagorized into sections. After all the data cleaning we ended up with a training set with ......... This is the training set we will be using for all of our models.
 
 ```{r echo = FALSE}
 trainData = read.csv("train.csv", stringsAsFactors = FALSE)
 testData = read.csv("test.csv", stringsAsFactors = FALSE)
-#datatable(trainData, rownames = FALSE, filter="top", options = list(pageLength = 10, scrollX=T, sDom= '<"top">lrt<"bottom">ip') )
 ```
 
-##  Cleaning the Data
-Upon further inspection of the data we noticed we had some variables that were causing us trouble. There are 19 variables with missing data. For some of the variables NA's really meant "None" so we fixed those by converting NA to "None". There was also a couple of observations that had one missing value for a given variable and we just fixed that by predicting the mean/mode of that variable for that observation. Any other additional modification is listed below along with the reason why we choose that modification.
+###  Dealing with NA's
+Upon further inspection of the data we noticed we had some variables that were causing us trouble. There are 19 variables with missing data. For a lot of the categorical variables "NA's" really meant "None" so we fixed those by converting NA level to a "None" level. There was also a couple of observations that had one missing value for a given variable and we just fixed that by predicting the mean/mode of that variable for that observation. Any other additional modification is listed below along with the reason why we choose that modification.
 
-* LotFrontage: Linear Feet of street connected to property. This one was a tough decision. It's missing 259/1460 approximately 18% of the data for this variable but we didnt want to lose the variable entirely. We decided to fill in the NA's with the mean value of the variable.
-* GarageYrBlt: Garage Year Built. We replaced the NA's with the Year the house was built as long as it actualy had a garage. We expect GarageYrBlt and YearBuilt to be highly correlated and eventually one will probably have to be removed from the model anyways.
-* MiscFeature: Miscellaneous feature. This variable was essentially worthless. Almost all of the data was missing and the data that did exist was 'tennis court' and 'other'. We removed this variable.
-
+* **LotFrontage:** Linear Feet of street connected to property. This one was a tough decision. It's missing 259/1460 approximately 18% of the data for this variable but we didnt want to lose the variable entirely. We decided to fill in the NA's with the mean value of the variable.
+* **GarageYrBlt:** Garage Year Built. We replaced the NA's with the Year the house was built as long as it actualy had a garage. We expect GarageYrBlt and YearBuilt to be highly correlated and eventually one will probably have to be removed from the model anyways.
+* **MiscFeature:** Miscellaneous feature. This variable was essentially worthless. Almost all of the data was missing and the data that did exist was 'tennis court' and 'other'. We removed this variable.
 
 ```{r, Finding the NAs, include=  FALSE, comment = ""}
 NAVariables <- which(colSums(is.na(trainData)) > 0)
@@ -141,7 +140,6 @@ trainData$Condition1 = as.factor(trainData$Condition1)
 trainData$BldgType = as.factor(trainData$BldgType)
 trainData$HouseStyle = as.factor(trainData$HouseStyle)
 trainData$RoofStyle = as.factor(trainData$RoofStyle)
-trainData$RoofMatl = as.factor(trainData$RoofMatl)
 trainData$Exterior1st = as.factor(trainData$Exterior1st)
 trainData$Exterior2nd = as.factor(trainData$Exterior2nd)
 trainData$Foundation = as.factor(trainData$Foundation)
@@ -160,38 +158,123 @@ trainData$KitchenQual = as.integer(revalue(trainData$KitchenQual, Qualities))
 trainData$Functional = as.integer(revalue(trainData$Functional, c('Sal'=0, 'Sev'=1, 'Maj2'=2, 'Maj1'=3, 'Mod'=4, 'Min2'=5, 'Min1'=6, 'Typ'=7)))
 trainData$PavedDrive = as.integer(revalue(trainData$PavedDrive, c('N'=0, 'P'=1, 'Y'=2)))
 
-
-#Variables We got Rid of
-trainData = subset(trainData, select = -Utilities)
-trainData = subset(trainData, select = -Condition2)
 #Not a part of the data just observation #
 trainData = subset(trainData, select = -Id)
-#Too Sparse < 1% of data not in same category
-trainData = subset(trainData, select = -RoofMatl)
-
-
 
 #Make sure Empty
 charVariables = names(trainData[,sapply(trainData, is.character)])
 charVariables
 ```
 
+###  Multicollinearity
+We decided to just deal with multicollinearity issues before building any models. We checked the correlation matrix for all numeric variables and decided to remove any pair of variables with a correlation of 0.75 or higher. Of the two variables we kept Whichever variable had a higher correlation with SalePrice. Below is a list of all of these pairs and which variables we kept.
+
+* **Garage Yr Blt vs. Year Built:** correlation = 0.845. We kept Year Built
+* **Garage Area vs. Garage Cars:** correlation = 0.882. We kept Garage Cars
+* **Total Basement SqFt vs. 1st Floor SqFt** correlation = 0.819. We kept Total Basement SqFt
+* **Garage Condition vs. Garage Quality** correlation = 0.959. We kept Garage Quality
+* **Total Rooms Above Ground vs. Ground Living Area** correlation = 0.825. We kept Ground Living Area
+
+```{r Multicollinearity, include=FALSE, echo=FALSE}
+#Finding the Correlated Variables
+    # numericVars <- which(sapply(trainData, is.numeric))
+    # all_numVar <- trainData[, numericVars]
+    # #Garage Year Build vs YearBuilt
+    # print(cor(all_numVar, trainData$GarageYrBlt) > 0.75)
+    # print(cor(trainData$GarageYrBlt, trainData$SalePrice))
+    # print(cor(trainData$YearBuilt, trainData$SalePrice))
+    # #Garage Garage Cars vs GarageArea
+    # print(cor(trainData$GarageArea, trainData$GarageCars))
+    # print(cor(trainData$GarageArea, trainData$SalePrice))
+    # print(cor(trainData$GarageCars, trainData$SalePrice))
+    # #TotalBsmtSF vs. X1stFlrSF
+    # print(cor(trainData$TotalBsmtSF, all_numVar) > 0.75)
+    # print(cor(trainData$TotalBsmtSF, trainData$X1stFlrSF))
+    # print(cor(trainData$TotalBsmtSF, trainData$SalePrice))
+    # print(cor(trainData$X1stFlrSF, trainData$SalePrice))
+    # #GarageCond vs. Garage Quality
+    # print(cor(trainData$GarageCond, all_numVar) > 0.75)
+    # print(cor(trainData$GarageCond, trainData$GarageQual))
+    # print(cor(trainData$GarageCond, trainData$SalePrice))
+    # print(cor(trainData$GarageQual, trainData$SalePrice))
+    # #Total Rooms Above Ground vs. Ground Living Area
+    # print(cor(trainData$TotRmsAbvGrd, all_numVar) > 0.75)
+    # print(cor(trainData$TotRmsAbvGrd, trainData$GrLivArea))
+    # print(cor(trainData$TotRmsAbvGrd, trainData$SalePrice))
+    # print(cor(trainData$GrLivArea, trainData$SalePrice))
+    
+#Remove the Variables
+trainData = subset(trainData, select = -GarageYrBlt)
+trainData = subset(trainData, select = -GarageArea)
+trainData = subset(trainData, select = -X1stFlrSF)
+trainData = subset(trainData, select = -GarageCond)
+trainData = subset(trainData, select = -TotRmsAbvGrd)
+
+#Check Removed
+#dim(trainData)
+```
+
+###  Dealing with Sparse Data
+Some of our factor variables had levels with a count of less then 5. This was causing problems with using cross validation. Below is a list of all the variables that had this issue and how we dealth with them.
+
+* **Utilities:** Type of utilities available. 2 levels with more than 99% of the data belonging to one level. We removed this variable.
+* **Condition2:** Proximity to various conditions. 8 levels with 99% of the data belonging to one level. We removed this variable.
+* **RoofMatl1:** Roof Material. 8 levels with more than 98% of the data belonging to one level. We removed this variable.
+* **Street:** 2 levels with more than 99% of the data belonging to one level. We removed this variable.
+* **Heating:** 6 levels with 98% of the data belonging to one level. We removed this variable.
+
+We kept the rest of the variables that had sparse levels in the model because they had other levels that were not sparse and could be important in future models. We converted all the factor variables into dummy variables and then just removed the dummy variables with levels that had less than 10 observations. This ended up being 32 out of 162 levels.
+
+```{r Looking at Catagorical Variables, echo=FALSE, include=FALSE}
+#Find Categorical Variables
+numericVars = which(sapply(trainData, is.numeric))
+all_factorVars = trainData[,-numericVars]
+print(names(all_factorVars))
+```
+```{r Sparse Data, include=FALSE,echo=FALSE}
+#Too Sparse < 2% of data not in same category
+trainData = subset(trainData, select = -Utilities)
+trainData = subset(trainData, select = -Condition2)
+trainData = subset(trainData, select = -RoofMatl)
+trainData = subset(trainData, select = -Street)
+trainData = subset(trainData, select = -Heating)
+```
+```{r Dummy Variables, include=FALSE, echo=FALSE}
+#Find all the factor variables
+factorVars = which(sapply(trainData, is.factor))
+factorVars = names(factorVars)
+#Create seperate data frame to convert factor variables to dummy varaibles
+DFfactors = trainData[, factorVars]
+DFdummies = dummy.data.frame(DFfactors, sep = ".")
+#Find Sparse dummy variables
+sparseLevels <- which(colSums(DFdummies[1:nrow(trainData[!is.na(trainData$SalePrice),]),])<10)
+#Remove Sparse dummy variables
+DFdummies = DFdummies[,-sparseLevels]
+#combine all the non factor variables in original data frame with our new dummy variables
+DFnumeric = trainData[,!(names(trainData) %in% factorVars)]
+trainDF.dummies = cbind(DFnumeric, DFdummies)
+```
+
+###  Removing Outliers
+
+###  Fixing Skewed Response Variable
+
+
 #Multiple Linear Regression
 The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 
 
-* 5 Fold Cross Valiation Error Rate: (waiting for clean data)
 * 10 Fold Cross Valiation Error Rate: (waiting for clean data)
 * Most Significant Parameters: 
 * Non-Significant Parameters: 
 
 ```{r, Base Model, echo=FALSE, include=FALSE}
-baseModel = glm(SalePrice ~ ., data = trainData)
+baseModel = glm(SalePrice ~ ., data = trainDF.dummies)
 summary(baseModel)
 ```
 
 ```{r, Cross Validation, comment="", include=FALSE, echo=FALSE}
-set.seed(4)
-cvTrainData = trainData
+set.seed(1)
+cvTrainData = trainDF.dummies
 cv.error10 = cv.glm(cvTrainData, baseModel, K=10)$delta[1]
 ```
 

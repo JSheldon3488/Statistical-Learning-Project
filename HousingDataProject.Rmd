@@ -18,6 +18,8 @@ library(boot)
 library(car)
 library(plyr)
 library(dummies)
+library(ggplot2)
+library(gridExtra)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -47,7 +49,6 @@ Upon further inspection of the data we noticed we had some variables that were c
 NAVariables <- which(colSums(is.na(trainData)) > 0)
 sort(colSums(sapply(trainData[NAVariables], is.na)), decreasing = TRUE)
 ```
-
 ```{r, Fixing NA Variables, echo=FALSE, include=FALSE}
 #Fixing Pool QC
 trainData$PoolQC[is.na(trainData$PoolQC)] = 'None'
@@ -129,7 +130,6 @@ trainData$Electrical = as.factor(trainData$Electrical)
 #Fixing MiscFeature (junk just remove)
 trainData = subset(trainData, select = -MiscFeature)
 ```
-
 ```{r, Fixing Character Variables, echo=FALSE,include=FALSE}
 #Turning Char variables into factor variables
 trainData$MSZoning = as.factor(trainData$MSZoning)
@@ -166,7 +166,7 @@ charVariables = names(trainData[,sapply(trainData, is.character)])
 charVariables
 ```
 
-###  Multicollinearity
+###  Dealing with Multicollinearity
 We decided to just deal with multicollinearity issues before building any models. We checked the correlation matrix for all numeric variables and decided to remove any pair of variables with a correlation of 0.75 or higher. Of the two variables we kept Whichever variable had a higher correlation with SalePrice. Below is a list of all of these pairs and which variables we kept.
 
 * **Garage Yr Blt vs. Year Built:** correlation = 0.845. We kept Year Built
@@ -231,7 +231,7 @@ numericVars = which(sapply(trainData, is.numeric))
 all_factorVars = trainData[,-numericVars]
 print(names(all_factorVars))
 ```
-```{r Sparse Data, include=FALSE,echo=FALSE}
+```{r Remove Worthless Variables, include=FALSE,echo=FALSE}
 #Too Sparse < 2% of data not in same category
 trainData = subset(trainData, select = -Utilities)
 trainData = subset(trainData, select = -Condition2)
@@ -239,7 +239,7 @@ trainData = subset(trainData, select = -RoofMatl)
 trainData = subset(trainData, select = -Street)
 trainData = subset(trainData, select = -Heating)
 ```
-```{r Dummy Variables, include=FALSE, echo=FALSE}
+```{r Dummy Variables and new Train DF, include=FALSE, echo=FALSE}
 #Find all the factor variables
 factorVars = which(sapply(trainData, is.factor))
 factorVars = names(factorVars)
@@ -255,10 +255,43 @@ DFnumeric = trainData[,!(names(trainData) %in% factorVars)]
 trainDF.dummies = cbind(DFnumeric, DFdummies)
 ```
 
-###  Removing Outliers
 
-###  Fixing Skewed Response Variable
 
+###  Dealing with Skewed Response Variable
+The response variable SalePrice was heavily right skewed. We fixed this with a log transformation. Below is a couple before and after graphs showing the results. We will be using the log(SalePrice) as our predictor variable in our models.
+
+```{r Create Log Sale Price Data Frame, include=FALSE, echo=FALSE}
+trainDF.log = trainDF.dummies
+trainDF.log$SalePrice = log(trainDF.log$SalePrice)
+```
+```{r Plot of SalePrice vs. Normal Distribution , echo=FALSE , fig.align = "center", fig.height = 5, fig.width = 7}
+p1 = ggplot(trainDF.dummies, aes(x=SalePrice)) +
+        geom_histogram(aes(y = ..density..), fill="blue", binwidth = 10000) +
+        stat_function(fun = dnorm, args = list(mean(trainDF.dummies$SalePrice),sd(trainDF.dummies$SalePrice)), colour = "red", lwd = 1) +
+        scale_x_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000")) +
+        labs(title = "SalePrice vs. Normal Distribution")
+
+p2 = ggplot(trainDF.log, aes(x=SalePrice)) +
+        geom_histogram(aes(y = ..density..), fill="blue", binwidth = .15) +
+        stat_function(fun = dnorm, args = list(mean(trainDF.log$SalePrice),sd(trainDF.log$SalePrice)), colour = "red", lwd = 1) +
+        scale_x_continuous(breaks= seq(10, 14, by=.5)) +
+        labs(title = "Log SalePrice vs. Normal Distribution")
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
+```
+```{r QQ Plots, echo=FALSE, fig.height = 5, fig.width = 7, fig.align = "center"}
+#QQ PLots
+par(mfrow = c(1,2))
+qqnorm(trainDF.dummies$SalePrice, main = "Sale Price QQ Plot")
+qqline(trainDF.dummies$SalePrice)
+qqnorm(trainDF.log$SalePrice, main = "Log Sale Price QQ Plot")
+qqline(trainDF.log$SalePrice)
+```
+
+```{r final Data to be used for models, echo=FALSE, include=FALSE}
+#Use cleanData for all future models
+cleanData = trainDF.log
+```
 
 #Multiple Linear Regression
 The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 

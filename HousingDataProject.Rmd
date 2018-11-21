@@ -304,7 +304,7 @@ trainDF.dummies[c(524, 1299), c('SalePrice', 'GrLivArea', 'OverallQual')]
 ```{r final Data to be used for models, echo=FALSE, include=FALSE}
 #Use cleanData for all future models
 cleanData = trainDF.log
-ceanData = cleanData[-c(524,1299),]
+cleanData = cleanData[-c(524,1299),]
 ```
 
 

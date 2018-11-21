@@ -22,6 +22,7 @@ library(ggplot2)
 library(gridExtra)
 library(leaps)
 library(ggrepel)
+library(ggthemes)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -360,20 +361,7 @@ predict.regsubsets = function(object, newdata, id, ...){
 ```
 
 ####Forward Stepwise Selection
-Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model. The most interesting thing I found from doing forward stepwise was just determining which variables were selected first and therefore the potentially important variables in predicting sale price. Below is a list of the first 10 variables selected and their meaning in order of how they were selected by forward stepwise selection.
-
-* **OverallQual:** Rates the overall material and finish of the house.
-* **BsmtFullBath:** Number of full bathrooms in the basement.
-* **YearBuilt:** Original Construction Date.
-* **OverallCond:** Rates the overall condition of the house.
-* **GarageQual:** Rates the Quality of the Garage.
-* **HeatingQC:** Heating Quality and Condition Rating.
-* **Alley.none:** Dummy Variable representing no alleyway access to the house.
-* **BsmtHalfBath:** Number of half bathrooms in the basement.
-* **GarageFinish:** Rating of Interior finish of the garage.
-* **MSZoning.FV:** Dummy Variable for Zoning Code for "Floating Village Residential"
-
-We found these results to be a little odd (are basement half bathrooms and alleyway access really more imporant than Above Ground Sq. feet?). We think this is because Overall Quality is correlated with some of the other more traditionally important variables like Above Ground SqFt. By itself Above Ground SqFt. has a correlation with sale price of 0.7 which is a lot higher then BsmtFullBath at 0.24, but Above Ground Sqft. is and Overall Quality have a correlation of 0.59. Because of this a lot of the information containted in Above Ground Sqft. is already in the model after adding overall quality. Therefore the second variable added is actually the second most important variable given the information from overall quality is already in the model, which is not necessarily the second most important variable in a houses Sale Price.
+Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model.
 
 ```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
 #CP, BIC, AdjR^2
@@ -409,12 +397,87 @@ plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of V
 points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
-####Backwards Stepwise Selection
-```{r, Backwards Stepwise Selection, include=FALSE, echo=FALSE}
+The most interesting thing I found from doing forward stepwise was just determining which variables were selected first and therefore the potentially important variables in predicting sale price.
 
+**First 10 Variables picked in model**
+
+* **OverallQual:** Rates the overall material and finish of the house.
+* **BsmtFullBath:** Number of full bathrooms in the basement.
+* **YearBuilt:** Original Construction Date.
+* **OverallCond:** Rates the overall condition of the house.
+* **GarageQual:** Rates the Quality of the Garage.
+* **HeatingQC:** Heating Quality and Condition Rating.
+* **Alley.none:** Dummy Variable representing no alleyway access to the house.
+* **BsmtHalfBath:** Number of half bathrooms in the basement.
+* **GarageFinish:** Rating of Interior finish of the garage.
+* **MSZoning.FV:** Dummy Variable for Zoning Code for "Floating Village Residential"
+
+We found these results to be a little odd (are basement half bathrooms and alleyway access really more imporant than Above Ground Sq. feet?). We think this is because Overall Quality is correlated with some of the other more traditionally important variables like Above Ground SqFt. By itself Above Ground SqFt. has a correlation with sale price of 0.7 which is a lot higher then BsmtFullBath at 0.24, but Above Ground Sqft. is and Overall Quality have a correlation of 0.59. Because of this a lot of the information containted in Above Ground Sqft. is already in the model after adding overall quality. Therefore the second variable added is actually the second most important variable given the information from overall quality is already in the model, which is not necessarily the second most important variable in a houses Sale Price.
+
+
+####Backwards Stepwise Selection
+Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 40-50 variables seems to be when the graphs begin to flatten out. I would lean towards a simpler model and choose the best 40 variable model. This is to many variables to report the model so we just look at some of the most significant ones below.
+
+```{r, Backwards Stepwise Selection, include=FALSE, echo=FALSE}
+#CP, BIC, AdjR^2
+regfit.back = regsubsets(SalePrice ~., data = subSetData, nvmax = 160, method = "backward")
+regfit.back.summary = summary(regfit.back)
+
+#validation set 
+set.seed(88)
+sample <- sample.int(n = nrow(subSetData), size = floor(.75*nrow(subSetData)), replace = F)
+train <- subSetData[sample, ]
+test  <- subSetData[-sample, ]
+
+regfit.valid = regsubsets(SalePrice ~., data = train, nvmax = 160, method = "backward")
+test.matrix = model.matrix(SalePrice ~., data = test)
+validation.errors = rep(NA, 160)
+for (i in 1:160){
+    coefi = coef(regfit.valid, id=i)
+    pred = test.matrix[,names(coefi)]%*%coefi
+    validation.errors[i] = mean((test$SalePrice-pred)^2)
+}
+```
+```{r plots for backstep, echo=FALSE}
+par(mfrow = c(2,2))
+plot(regfit.back.summary$adjr2, type = "l", xlab = "Number of Variables", ylab = "Adjusted R Squared")
+points(which.max(regfit.back.summary$adjr2), regfit.back.summary$adjr2[which.max(regfit.back.summary$adjr2)], col="red", cex=2,pch=20)
+plot(regfit.back.summary$bic, type = "l", ylab = "BIC", xlab = "Number of Variables")
+points(which.min(regfit.back.summary$bic), regfit.back.summary$bic[which.min(regfit.back.summary$bic)], col="red", cex=2,pch=20)
+plot(regfit.back.summary$cp, type = "l", ylab = "CP", xlab = "Number of Variables")
+points(which.min(regfit.back.summary$cp), regfit.back.summary$cp[which.min(regfit.back.summary$cp)], col="red", cex=2,pch=20)
+plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of Variables")
+points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
+**Last 10 Variables left in model**
 
+* **OverallQual:** Rates the overall material and finish of the house.
+* **BsmtFullBath:** Number of full bathrooms in the basement.
+* **YearBuilt:** Original Construction Date.
+* **BsmtFinSF1:** How many square feet of the basement that is finished.
+* **OverallCond:** Rates the overall condition of the house.
+* **GarageQual:** Rates the Quality of the Garage.
+* **BsmtUnfSF:** Unfinished square feet of basement area.
+* **LotArea:** Lot Size in Square Feet
+* **BsmtFinSF2:** Rating of basment finished area.
+* **Neighborhood.MeadowV:** Neighboorhood location Meadow Village
+
+The differences between forward stepwise and backwards stepwise are that BsmtFinSF1, BsmtUnfSF, LotArea, BsmtFinSF2, Neighborhood.MeadowV are now in the top 10 and HeatingQC, Alley.none, BsmtHalfBath, GarageFinish, MSZoning.FV, have been removed from the top 10. I think it is interesting to note that both methods find that having a finished basement with bathrooms seems to be important factor in predicting SalePrice (after accounting for Overall Quality). 
+
+Also we see that a neighborhood appeared in the top 10 here. The coefficient for this neighborhood is negative so we looked a little deeper to see this neighboorhoods relationship with sale price in comparison to other neighborhoods. As you can see from the plot below Meadown Village has the lowest median sale price of all neighborhoods therefore this coefficient makes sense. Also it makes sense that Meadow Village would be a significant factor in predicting sale price because it appears to be one of the worst neighborhoods in terms of sales price in Ames Iowa.
+
+
+```{r a look at Neighborhoods, echo=FALSE}
+neighbor.plot = ggplot(trainData, aes(Neighborhood, SalePrice)) +
+                geom_boxplot(aes(fill = factor(Neighborhood)))  +
+                theme(axis.text.x = element_text(angle = 65, vjust = 0.6)) +
+                labs( x = "Neighborhoods", y = "Sale Price") +
+                theme(legend.position="none") +
+                scale_y_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000") ) +
+                geom_hline(yintercept = 88000, linetype="dashed", color = "red")
+neighbor.plot
+```
 
 ##Shrinkage Methods
 ####Ridge Regression

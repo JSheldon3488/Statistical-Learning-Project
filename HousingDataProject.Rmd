@@ -20,6 +20,8 @@ library(plyr)
 library(dummies)
 library(ggplot2)
 library(gridExtra)
+library(leaps)
+library(ggrepel)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -288,10 +290,23 @@ qqnorm(trainDF.log$SalePrice, main = "Log Sale Price QQ Plot")
 qqline(trainDF.log$SalePrice)
 ```
 
+### Dealing with Outliers
+The only outliers we found were observations 524 and 1299. We deemed these outliers significant enough to remove because they were huge houses with a overall quality rating of 10 (the highest rating) and yet they sold for a very low price. By looking at the size and quality rating of the house if appears they may have missed a 0 on the end of the price. Size of the house (GrLiveArea) and Overall Quality are the two highest positive correlated variables with SalePrice which lead us to believe these SalePrices were a mistake and we removed these observations from the data set. We left the graphs below in terms of the actual Sale Price and not log of the Sale Price so it would be easier to interpret
+
+```{r Finding Outliers, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6, comment=""}
+ggplot(data=trainDF.dummies[!is.na(trainDF.dummies$SalePrice),], aes(x=GrLivArea, y=SalePrice))+
+        geom_point(col='blue') + geom_smooth(method = "lm", se=FALSE, color="red", aes(group=1)) +
+        scale_y_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000") ) +
+        geom_text_repel(aes(label = ifelse(trainDF.dummies$GrLivArea[!is.na(trainDF.dummies$SalePrice)]>4500, rownames(trainDF.dummies), '')))
+trainDF.dummies[c(524, 1299), c('SalePrice', 'GrLivArea', 'OverallQual')]
+```
+
 ```{r final Data to be used for models, echo=FALSE, include=FALSE}
 #Use cleanData for all future models
 cleanData = trainDF.log
+ceanData = cleanData[-c(524,1299),]
 ```
+
 
 #Multiple Linear Regression
 The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 
@@ -332,9 +347,66 @@ outlierTest(baseModel)
 #Model Selection and Regularization
 
 ##Subset Selection
-####Forward Stepwise Selection
-```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
+```{r Stuff We Need for Subset Selection, include=FALSE, echo=FALSE}
+subSetData = cleanData
 
+predict.regsubsets = function(object, newdata, id, ...){
+    form=as.formula (object$call [[2]])
+    mat=model.matrix(form ,newdata )
+    coefi=coef(object ,id=id)
+    xvars=names(coefi)
+    mat[,xvars]%*%coefi
+}
+```
+
+####Forward Stepwise Selection
+Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model. The most interesting thing I found from doing forward stepwise was just determining which variables were selected first and therefore the potentially important variables in predicting sale price. Below is a list of the first 10 variables selected and their meaning in order of how they were selected by forward stepwise selection.
+
+* **OverallQual:** Rates the overall material and finish of the house.
+* **BsmtFullBath:** Number of full bathrooms in the basement.
+* **YearBuilt:** Original Construction Date.
+* **OverallCond:** Rates the overall condition of the house.
+* **GarageQual:** Rates the Quality of the Garage.
+* **HeatingQC:** Heating Quality and Condition Rating.
+* **Alley.none:** Dummy Variable representing no alleyway access to the house.
+* **BsmtHalfBath:** Number of half bathrooms in the basement.
+* **GarageFinish:** Rating of Interior finish of the garage.
+* **MSZoning.FV:** Dummy Variable for Zoning Code for "Floating Village Residential"
+
+We found these results to be a little odd (are basement half bathrooms and alleyway access really more imporant than Above Ground Sq. feet?). We think this is because Overall Quality is correlated with some of the other more traditionally important variables like Above Ground SqFt. By itself Above Ground SqFt. has a correlation with sale price of 0.7 which is a lot higher then BsmtFullBath at 0.24, but Above Ground Sqft. is and Overall Quality have a correlation of 0.59. Because of this a lot of the information containted in Above Ground Sqft. is already in the model after adding overall quality. Therefore the second variable added is actually the second most important variable given the information from overall quality is already in the model, which is not necessarily the second most important variable in a houses Sale Price.
+
+```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
+#CP, BIC, AdjR^2
+regfit.fwd = regsubsets(SalePrice ~., data = subSetData, nvmax = 160, method = "forward")
+regfit.fwd.summary = summary(regfit.fwd)
+
+#validation set 
+set.seed(88)
+sample <- sample.int(n = nrow(subSetData), size = floor(.75*nrow(subSetData)), replace = F)
+train <- subSetData[sample, ]
+test  <- subSetData[-sample, ]
+
+regfit.valid = regsubsets(SalePrice ~., data = train, nvmax = 160, method = "forward")
+test.matrix = model.matrix(SalePrice ~., data = test)
+validation.errors = rep(NA, 160)
+for (i in 1:160){
+    coefi = coef(regfit.valid, id=i)
+    pred = test.matrix[,names(coefi)]%*%coefi
+    validation.errors[i] = mean((test$SalePrice-pred)^2)
+}
+```
+
+```{r plots to include, echo=FALSE}
+#set xlab abd ylab and points
+par(mfrow = c(2,2))
+plot(regfit.fwd.summary$adjr2, type = "l", xlab = "Number of Variables", ylab = "Adjusted R Squared")
+points(which.max(regfit.fwd.summary$adjr2), regfit.fwd.summary$adjr2[which.max(regfit.fwd.summary$adjr2)], col="red", cex=2,pch=20)
+plot(regfit.fwd.summary$bic, type = "l", ylab = "BIC", xlab = "Number of Variables")
+points(which.min(regfit.fwd.summary$bic), regfit.fwd.summary$bic[which.min(regfit.fwd.summary$bic)], col="red", cex=2,pch=20)
+plot(regfit.fwd.summary$cp, type = "l", ylab = "CP", xlab = "Number of Variables")
+points(which.min(regfit.fwd.summary$cp), regfit.fwd.summary$cp[which.min(regfit.fwd.summary$cp)], col="red", cex=2,pch=20)
+plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of Variables")
+points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
 ####Backwards Stepwise Selection

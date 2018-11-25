@@ -23,6 +23,7 @@ library(gridExtra)
 library(leaps)
 library(ggrepel)
 library(ggthemes)
+library(glmnet)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -34,7 +35,7 @@ Another goal of this project is to learn more about and get experience with the 
 
 
 #The Data
-The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. There are 1460 observations in total in the training Data. We did a lot of data cleaning before building any models. Below is everything we did catagorized into sections. After all the data cleaning we ended up with a training set with ......... This is the training set we will be using for all of our models.
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. There are 1460 observations in total in the training Data. We did a lot of data cleaning before building any models. Below is everything we did catagorized into sections. After all the data cleaning we ended up with a training set with 1458 observations and 178 variables (after dummy variable creation). This is the training set we will be using for all of our models.
 
 ```{r echo = FALSE}
 trainData = read.csv("train.csv", stringsAsFactors = FALSE)
@@ -481,15 +482,88 @@ neighbor.plot
 
 ##Shrinkage Methods
 ####Ridge Regression
-```{r, Ridge Regression, include=FALSE, echo=FALSE}
+The best lambda we found is pretty close to 0 and therefore it looks like the least squares model is pretty close to the best model for this data set. This is not a huge surprise because we noticed in our subset selection models that a lot of predictors were significant. Also our sample size is a lot larger then the number of predictors 1458 >> 177 so reducing variance may not be a huge concern here. The Ridge Regression model and the least squares model perform pretty much identically on a validation set at lamda = 0.044. They both significantly beat the Null Model that only uses the mean of Sale Price to predict Sale Price. Inference on Ridge regression is not ideal but below is a plot of the Ridge Regression coefficients with the largest coefficients labeled.
 
+* **Best Lambda:** 0.044
+* **Test RMSE Ridge:** $21,646.23
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+
+*We changed the Sale Price back into dollars instead of log(SalePrice) because it was easier to interpret. Also note this is the Root Mean Squared Error which can be thought of as how close our predictions are on average.
+
+```{r, Ridge Regression, include=FALSE, echo=FALSE}
+#Setup
+set.seed(1)
+x = model.matrix(SalePrice ~., cleanData)[,-1]
+y = cleanData$SalePrice
+train = sample(1:nrow(x), nrow(x)/1.5)
+test = (-train)
+y.test= y[test]
+ridge.mod = glmnet(x[train,],y[train],alpha = 0)
+
+#Find best lamda value
+cv.out = cv.glmnet(x[train,],y[train], alpha = 0)
+bestLambda = cv.out$lambda.min
+bestLambda
+
+#test RMSE for best lambda
+ridge.pred = predict(ridge.mod, s = bestLambda, newx = x[test,])
+(mean((exp(ridge.pred)-exp(y.test))^2))^(1/2)
+#test RMSE for least squares model
+ls.pred = predict(ridge.mod, s = 0.00001, newx = x[test,])
+(mean((exp(ls.pred)-exp(y.test))^2))^(1/2)
+#baseline null model predictions
+mean(( mean(exp(y[train])) -exp(y.test) )^2)^(1/2)
+```
+```{r, Ridge Regression plot, echo=FALSE}
+plot(ridge.mod, xvar="lambda")
+legend(1.75, -.125, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.MeadowV", "Exterior1st.BrkFace", "Neighborhood.Crawfor", "Neighborhood.StoneBr"),
+       col=c("red","magenta", "black", "red", "green", 69), lty=c(2,1,1,1,1,1), cex=1)
+abline(v = log(bestLambda), col = "red", lwd = 2, lty = 2)
 ```
 
 ####Lasso Regression
-```{r, Lasso, include=FALSE, echo=FALSE}
+The Lasso model with the lowest cross validation error rate is a model with 69 predictors. This matches with what we saw in forward and backward stepwise selection. Although this helps with inference because of having fewer variables it doesn't help all that much with prediction. Again the Test RMSE is approximately the same between the Lasso model and the full Least Squares model. Below is a plot of the Lasso Regression coefficients with the largest coefficients labeled. Note we are seeing a lot of the same variables appearing again and again. It appears Location really is that important.
 
+* **Best Lambda:** 0.0042
+* **Test RMSE Lasso:** $20,296.13
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+* **Count of Non-Zero Coefficients:** 69
+
+
+```{r, Lasso, include=FALSE, echo=FALSE}
+#Setup
+set.seed(1)
+x = model.matrix(SalePrice ~., cleanData)[,-1]
+y = cleanData$SalePrice
+train = sample(1:nrow(x), nrow(x)/1.5)
+test = (-train)
+y.test= y[test]
+
+#Baseline Lasso Model
+lasso.mod = glmnet(x[train,], y[train], alpha = 1)
+
+#Find best Lambda
+cv.lasso.out = cv.glmnet(x[train,], y[train], alpha = 1)
+plot(cv.lasso.out)
+bestLassoLambda = cv.lasso.out$lambda.min
+bestLassoLambda
+
+#Lasso Predictions accuracy
+lasso.pred = predict(lasso.mod, s = bestLassoLambda, newx = x[test,])
+(mean((exp(lasso.pred)-exp(y.test))^2))^(1/2)
+
+#Number of Non Zero coefficients at best lambda
+lasso.coef = predict(lasso.mod, type = "coefficients", s=bestLassoLambda)
+sum(lasso.coef!=0)
 ```
 
+```{r, Lasso Regression plot, echo=FALSE}
+plot(lasso.mod, xvar="lambda")
+legend(-4, -.275, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.MeadowV", "Neighborhood.Crawfor"), col=c("red", 69, "black", "blue" ), lty=c(2,1,1,1), pt.cex=1,  cex = 0.75)
+abline(v = log(bestLassoLambda), col = "red", lwd = 2, lty = 2)
+```
 
 
 ##Dimension Reduction Methods

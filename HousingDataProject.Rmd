@@ -24,6 +24,7 @@ library(leaps)
 library(ggrepel)
 library(ggthemes)
 library(glmnet)
+library(pls)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -349,20 +350,14 @@ outlierTest(baseModel)
 #Model Selection and Regularization
 
 ##Subset Selection
+The goal of subset Selection is to try and find the smallest subset of the predictors that are statistically significant and still lead to a good model fit. The advantage to an approach like this over Multiple Linear Regression is that using a subset of the original predictors can lead to a significant reduction in variance while only slightly increasing the bias. Also it simplifies model inference and kind of allows us to see which variables are "most important". Subset Selection still uses Least Squares fits in the form of  $Y = \beta_0 +\sum_{i=1}^p \beta_i X_i + \epsilon$.  Our hope is that a subset selection model will out perform the full model we used in Multiple Linear Regression Section. Below we perform both Forward stepwise Selection and Backwards Stepwise Selection and give more details about the methods used and the results.
+
 ```{r Stuff We Need for Subset Selection, include=FALSE, echo=FALSE}
 subSetData = cleanData
-
-predict.regsubsets = function(object, newdata, id, ...){
-    form=as.formula (object$call [[2]])
-    mat=model.matrix(form ,newdata )
-    coefi=coef(object ,id=id)
-    xvars=names(coefi)
-    mat[,xvars]%*%coefi
-}
 ```
 
 ####Forward Stepwise Selection
-Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model.
+To perform forward stepwise selection we fit a model that iteratively steps forward adding the next most significant predictor at each iteration. We then used Cross Validation on each model from 1-177 predictors to find the best model size for our data. We also looked at the CP, BIC and Adjusted R^2 scores to decide on the best model size. Below is graphs of all 4 methods we used in picking the best model size.
 
 ```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
 #CP, BIC, AdjR^2
@@ -383,6 +378,11 @@ for (i in 1:160){
     pred = test.matrix[,names(coefi)]%*%coefi
     validation.errors[i] = mean((test$SalePrice-pred)^2)
 }
+
+#Get Test RMSE on Sale Price
+coefi2 = coef(regfit.valid, id=50)
+pred2 = test.matrix[,names(coefi2)]%*%coefi2
+mean(( exp(test$SalePrice) - exp(pred2) )^2)^(1/2)
 ```
 
 ```{r plots to include, echo=FALSE}
@@ -398,7 +398,17 @@ plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of V
 points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
-The most interesting thing I found from doing forward stepwise was just determining which variables were selected first and therefore the potentially important variables in predicting sale price.
+Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model. Below is a report of the model with 50 variables vs the full Least Squares Model.
+
+* **Best Model Size:** 50
+* **Test RMSE FWD Stepwise Selction:** $33,193.09
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+*We changed the Sale Price back into dollars instead of log(SalePrice) because it was easier to interpret. Also note this is the Root Mean Squared Error which can be thought of as how close our predictions are on average.
+
+Surprisingly this model did very poorly. As we kept increasing the number of predictors the validation set RMSE kept decreasing. It appears our dataset does not have a problem with high variance and the reduction in variance we gained from a smaller model did not outweigh the increase in bias we incurred from using a smaller model. 
+
+The most interesting thing we found from doing forward stepwise was just determining which variables were selected first and therefore are potentially important variables in predicting sale price.
 
 **First 10 Variables picked in model**
 
@@ -413,11 +423,9 @@ The most interesting thing I found from doing forward stepwise was just determin
 * **GarageFinish:** Rating of Interior finish of the garage.
 * **MSZoning.FV:** Dummy Variable for Zoning Code for "Floating Village Residential"
 
-We found these results to be a little odd (are basement half bathrooms and alleyway access really more imporant than Above Ground Sq. feet?). We think this is because Overall Quality is correlated with some of the other more traditionally important variables like Above Ground SqFt. By itself Above Ground SqFt. has a correlation with sale price of 0.7 which is a lot higher then BsmtFullBath at 0.24, but Above Ground Sqft. is and Overall Quality have a correlation of 0.59. Because of this a lot of the information containted in Above Ground Sqft. is already in the model after adding overall quality. Therefore the second variable added is actually the second most important variable given the information from overall quality is already in the model, which is not necessarily the second most important variable in a houses Sale Price.
-
 
 ####Backwards Stepwise Selection
-Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 40-50 variables seems to be when the graphs begin to flatten out. I would lean towards a simpler model and choose the best 40 variable model. This is to many variables to report the model so we just look at some of the most significant ones below.
+The goal, methods and equation for backwards stepwise selection is the same as that of forward stepwise selection so we will not restate them all here.
 
 ```{r, Backwards Stepwise Selection, include=FALSE, echo=FALSE}
 #CP, BIC, AdjR^2
@@ -438,6 +446,10 @@ for (i in 1:160){
     pred = test.matrix[,names(coefi)]%*%coefi
     validation.errors[i] = mean((test$SalePrice-pred)^2)
 }
+coefi2 = coef(regfit.valid, id=50)
+pred2 = test.matrix[,names(coefi2)]%*%coefi2
+mean(( exp(test$SalePrice) - exp(pred2) )^2)^(1/2)
+
 ```
 ```{r plots for backstep, echo=FALSE}
 par(mfrow = c(2,2))
@@ -450,6 +462,15 @@ points(which.min(regfit.back.summary$cp), regfit.back.summary$cp[which.min(regfi
 plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of Variables")
 points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
+
+Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 40-50 variables seems to be when the graphs begin to flatten out. We decided to build a model with 50 predictors and use a validation set to estimate the RMSE. Below are the results.
+
+* **Best Model Size:** 50
+* **Test RMSE FWD Stepwise Selction:** $27,823.40
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+
+This model outperforms Forward Stepwise Selection but still does not outperform the Full Least Squares model. Again it appears like the reduction in varaiance we gain from fitting a simpler model do not outweigh the increase in bias.
 
 **Last 10 Variables left in model**
 
@@ -464,10 +485,7 @@ points(which.min(validation.errors), validation.errors[which.min(validation.erro
 * **BsmtFinSF2:** Rating of basment finished area.
 * **Neighborhood.MeadowV:** Neighboorhood location Meadow Village
 
-The differences between forward stepwise and backwards stepwise are that BsmtFinSF1, BsmtUnfSF, LotArea, BsmtFinSF2, Neighborhood.MeadowV are now in the top 10 and HeatingQC, Alley.none, BsmtHalfBath, GarageFinish, MSZoning.FV, have been removed from the top 10. I think it is interesting to note that both methods find that having a finished basement with bathrooms seems to be important factor in predicting SalePrice (after accounting for Overall Quality). 
-
-Also we see that a neighborhood appeared in the top 10 here. The coefficient for this neighborhood is negative so we looked a little deeper to see this neighboorhoods relationship with sale price in comparison to other neighborhoods. As you can see from the plot below Meadown Village has the lowest median sale price of all neighborhoods therefore this coefficient makes sense. Also it makes sense that Meadow Village would be a significant factor in predicting sale price because it appears to be one of the worst neighborhoods in terms of sales price in Ames Iowa.
-
+I think it is interesting to note that both subset selection methods find that having a finished basement with bathrooms seems to be important factor in predicting SalePrice (after accounting for Overall Quality). Also we see that a neighborhood appeared in the top 10 here. The coefficient for this neighborhood is negative so we dug a little deeper to see this neighboorhoods relationship with sale price in comparison to other neighborhoods. As you can see from the plot below Meadown Village has the lowest median sale price of all neighborhoods therefore this coefficient makes sense. Also it makes sense that Meadow Village would be a significant factor in predicting sale price because it appears to be one of the worst neighborhoods in terms of sales price in Ames Iowa.
 
 ```{r a look at Neighborhoods, echo=FALSE}
 neighbor.plot = ggplot(trainData, aes(Neighborhood, SalePrice)) +
@@ -482,14 +500,9 @@ neighbor.plot
 
 ##Shrinkage Methods
 ####Ridge Regression
-The best lambda we found is pretty close to 0 and therefore it looks like the least squares model is pretty close to the best model for this data set. This is not a huge surprise because we noticed in our subset selection models that a lot of predictors were significant. Also our sample size is a lot larger then the number of predictors 1458 >> 177 so reducing variance may not be a huge concern here. The Ridge Regression model and the least squares model perform pretty much identically on a validation set at lamda = 0.044. They both significantly beat the Null Model that only uses the mean of Sale Price to predict Sale Price. Inference on Ridge regression is not ideal but below is a plot of the Ridge Regression coefficients with the largest coefficients labeled.
+The goal of Ridge Regression is to find a set of coefficients that minimize  $RSS +\lambda\sum_{j=1}^p \beta^2_j$.  The summation terms works as a shrinkage penalty that incentivises the model to srink the coefficients towards 0. The hope is that by doing this we will significantly reduce model variance while only slightly increasing model bias and therefore be able to outperform the full Least Squares model. 
 
-* **Best Lambda:** 0.044
-* **Test RMSE Ridge:** $21,646.23
-* **Test RMSE Least Squares:** $21,543.60
-* **Test RMSE Null Model:** $79,513.67
-
-*We changed the Sale Price back into dollars instead of log(SalePrice) because it was easier to interpret. Also note this is the Root Mean Squared Error which can be thought of as how close our predictions are on average.
+The equation aboves shrinkage penalty depends on the value of lambda you choose. In order to find the best value for lambda we performed cross validation on a lot of different lambda values. Below is a graph of the coefficients for different levels of lambda along with the best lambda we found using Cross Validation. (note: the function we use to fit the models automatically performs variable regularization)
 
 ```{r, Ridge Regression, include=FALSE, echo=FALSE}
 #Setup
@@ -522,24 +535,21 @@ legend(1.75, -.125, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.Me
 abline(v = log(bestLambda), col = "red", lwd = 2, lty = 2)
 ```
 
-####Lasso Regression
-The Lasso model with the lowest cross validation error rate is a model with 69 predictors. This matches with what we saw in forward and backward stepwise selection. Although this helps with inference because of having fewer variables it doesn't help all that much with prediction. Again the Test RMSE is approximately the same between the Lasso model and the full Least Squares model. Below is a plot of the Lasso Regression coefficients with the largest coefficients labeled. Note we are seeing a lot of the same variables appearing again and again. It appears Location really is that important.
+The best lambda we found is close to 0 and therefore it looks like this model will be close to the full Least Squares model. This is not a huge surprise because we noticed in our subset selection models that a lot of predictors were significant. Also our sample size is a lot larger then the number of predictors 1458 >> 177 so reducing variance may not be a huge concern for us and the increase in bias may be a bigger problem. Below is a comparison in the model accuracies.
 
-* **Best Lambda:** 0.0042
-* **Test RMSE Lasso:** $20,296.13
+* **Best Lambda:** 0.044
+* **Test RMSE Ridge:** $21,646.23
 * **Test RMSE Least Squares:** $21,543.60
 * **Test RMSE Null Model:** $79,513.67
-* **Count of Non-Zero Coefficients:** 69
+
+The Ridge Regression model and the least squares model perform pretty much identically on a validation set at lamda = 0.044. They both significantly beat the Null Model that only uses the mean of Sale Price to predict Sale Price but essentially they are pretty much the same model.
+
+####Lasso Regression
+The goal of Lasso Regression is similar to Ridge Regression but in Lasso Regression we also perform subset selection. This has the benefit of potentially reducing variance and therefore improving prediction accuracy while also improving interpretibilty. We hope this model will outperform the full Least Squares while also being a lot more interpretible than Ridge Regression. The equation we use to do this is similar to Ridge Regression but now we minimize $RSS +\lambda\sum_{j=1}^p\lvert \beta_j \rvert$. Again we need to find the best lambda and we use the same methods as before.
 
 
 ```{r, Lasso, include=FALSE, echo=FALSE}
-#Setup
-set.seed(1)
-x = model.matrix(SalePrice ~., cleanData)[,-1]
-y = cleanData$SalePrice
-train = sample(1:nrow(x), nrow(x)/1.5)
-test = (-train)
-y.test= y[test]
+#Use train and test from before 
 
 #Baseline Lasso Model
 lasso.mod = glmnet(x[train,], y[train], alpha = 1)
@@ -565,14 +575,46 @@ legend(-4, -.275, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.Mead
 abline(v = log(bestLassoLambda), col = "red", lwd = 2, lty = 2)
 ```
 
+The Lasso model with the lowest cross validation error rate is a model with 71 predictors. This is close to we saw in forward and backward stepwise selection. 
+
+* **Best Lambda:** 0.0039
+* **Test RMSE Lasso:** $20,248.17
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+* **Count of Non-Zero Coefficients:** 71
+
+Although this helps with inference and interpretibility because of having fewer variables it doesn't help all that much with prediction. Again the Test RMSE is approximately the same between the Lasso model and the full Least Squares model. Currently this is the best model for both prediction and interpretibility we have.
 
 ##Dimension Reduction Methods
 ####Principle Components Regression
+The goals of principle components regression is to find principle components of the form  Z = $\sum_{i=1}^n \phi_jX_j$  such that a few principle components can be used to predict the response. The hope is that this will lead to a substantial reduction in variance while only causing a slight increase in bias. Note that each principle component is a linear cobination of all the predictors. We want this method to outperform the Least Squares. This has an advantage over Least Squares in that it will have a lower variance but it will have a higher bias because we are assuming a simpler model. 
+
+We fit a Principle Components Regression model (with scale = TRUE to regularize the data) and used cross validation to determine the optimal number of principal components. Below is a plot of this model fit. After finding the optimal number of components we fit a new model only on a training data set and then used a validation set to assess the accuracy of a PCR model with 30 components. Below is a description of the results.
+
+* **Optimal Number of Principle Components:** 30
+* **Test RMSE PCR:** $25,735.92
+* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Null Model:** $79,513.67
+
+Unfortunately again we see that the decrease in variance from a dimension reduction method does not help us. Our model does not appear to have high variance issues. This is reasonable because our number of observations is significantly higher than the number of predictors. Hopefully we will have better results with methods that reduce bias.
+
 ```{r, PCR, include=FALSE, echo=FALSE}
+set.seed(1)
+#Find best number of principle components
+pcr.fit = pcr(SalePrice ~., data = cleanData, scale = TRUE, validation = "CV")
+#summary(pcr.fit)
 
+#Validation Set Results
+pcr.fittrain = pcr(SalePrice ~., data = cleanData, subset = train, scale = TRUE, validation = "CV")
+pcr.pred = predict(pcr.fittrain, x[test,], ncomp = 170)
+mean((exp(pcr.pred) - exp(y.test))^2)^(1/2)
 ```
 
-####Partial Least Squares
-```{r, PLS, include=FALSE, echo=FALSE}
-
+```{r, PCR Plots, echo=FALSE}
+validationplot(pcr.fit, val.type = "MSEP")
 ```
+
+
+
+
+

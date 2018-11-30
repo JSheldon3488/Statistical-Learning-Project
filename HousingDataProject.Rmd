@@ -25,6 +25,9 @@ library(ggrepel)
 library(ggthemes)
 library(glmnet)
 library(pls)
+library(psych)
+library(gam)
+library(splines)
 ```
 #Abstract
 The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
@@ -293,6 +296,10 @@ qqnorm(trainDF.log$SalePrice, main = "Log Sale Price QQ Plot")
 qqline(trainDF.log$SalePrice)
 ```
 
+### Regularization of predictors
+We converted all the numeric predictors that has a skewness rating of greater then absolute value of 1 by taking the log of them. This had the effect of removing any skewed tails and effectively normailzing the predictors.
+
+
 ### Dealing with Outliers
 The only outliers we found were observations 524 and 1299. We deemed these outliers significant enough to remove because they were huge houses with a overall quality rating of 10 (the highest rating) and yet they sold for a very low price. By looking at the size and quality rating of the house if appears they may have missed a 0 on the end of the price. Size of the house (GrLiveArea) and Overall Quality are the two highest positive correlated variables with SalePrice which lead us to believe these SalePrices were a mistake and we removed these observations from the data set. We left the graphs below in terms of the actual Sale Price and not log of the Sale Price so it would be easier to interpret
 
@@ -314,19 +321,17 @@ cleanData = cleanData[-c(524,1299),]
 #Multiple Linear Regression
 The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 
 
-* 10 Fold Cross Valiation Error Rate: (waiting for clean data)
-* Most Significant Parameters: 
-* Non-Significant Parameters: 
+* 10 Fold Cross Valiation RMSE: $21,767.80
 
 ```{r, Base Model, echo=FALSE, include=FALSE}
-baseModel = glm(SalePrice ~ ., data = trainDF.dummies)
-summary(baseModel)
-```
-
-```{r, Cross Validation, comment="", include=FALSE, echo=FALSE}
-set.seed(1)
-cvTrainData = trainDF.dummies
-cv.error10 = cv.glm(cvTrainData, baseModel, K=10)$delta[1]
+#Just use this model for Potential Problems Section
+set.seed(88)
+sample <- sample.int(n = nrow(cleanData), size = floor(.75*nrow(cleanData)), replace = F)
+train.mlr <- cleanData[sample, ]
+test.mlr  <- cleanData[-sample, ]
+baseModel = glm(SalePrice ~ ., data = train.mlr)
+mlr.pred = predict(baseModel, newdata = test.mlr)
+mean((exp(mlr.pred) - exp(test.mlr$SalePrice))^2)^(1/2)
 ```
 
 ##  Potential Problems
@@ -365,7 +370,7 @@ regfit.fwd = regsubsets(SalePrice ~., data = subSetData, nvmax = 160, method = "
 regfit.fwd.summary = summary(regfit.fwd)
 
 #validation set 
-set.seed(88)
+set.seed(1)
 sample <- sample.int(n = nrow(subSetData), size = floor(.75*nrow(subSetData)), replace = F)
 train <- subSetData[sample, ]
 test  <- subSetData[-sample, ]
@@ -401,8 +406,8 @@ points(which.min(validation.errors), validation.errors[which.min(validation.erro
 Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model. Below is a report of the model with 50 variables vs the full Least Squares Model.
 
 * **Best Model Size:** 50
-* **Test RMSE FWD Stepwise Selction:** $33,193.09
-* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE FWD Stepwise Selction:** $22,584.54
+* **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 *We changed the Sale Price back into dollars instead of log(SalePrice) because it was easier to interpret. Also note this is the Root Mean Squared Error which can be thought of as how close our predictions are on average.
 
@@ -433,7 +438,7 @@ regfit.back = regsubsets(SalePrice ~., data = subSetData, nvmax = 160, method = 
 regfit.back.summary = summary(regfit.back)
 
 #validation set 
-set.seed(88)
+set.seed(1)
 sample <- sample.int(n = nrow(subSetData), size = floor(.75*nrow(subSetData)), replace = F)
 train <- subSetData[sample, ]
 test  <- subSetData[-sample, ]
@@ -466,8 +471,8 @@ points(which.min(validation.errors), validation.errors[which.min(validation.erro
 Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 40-50 variables seems to be when the graphs begin to flatten out. We decided to build a model with 50 predictors and use a validation set to estimate the RMSE. Below are the results.
 
 * **Best Model Size:** 50
-* **Test RMSE FWD Stepwise Selction:** $27,823.40
-* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE FWD Stepwise Selction:** $23341.39
+* **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 
 This model outperforms Forward Stepwise Selection but still does not outperform the Full Least Squares model. Again it appears like the reduction in varaiance we gain from fitting a simpler model do not outweigh the increase in bias.
@@ -522,9 +527,7 @@ bestLambda
 #test RMSE for best lambda
 ridge.pred = predict(ridge.mod, s = bestLambda, newx = x[test,])
 (mean((exp(ridge.pred)-exp(y.test))^2))^(1/2)
-#test RMSE for least squares model
-ls.pred = predict(ridge.mod, s = 0.00001, newx = x[test,])
-(mean((exp(ls.pred)-exp(y.test))^2))^(1/2)
+
 #baseline null model predictions
 mean(( mean(exp(y[train])) -exp(y.test) )^2)^(1/2)
 ```
@@ -539,7 +542,7 @@ The best lambda we found is close to 0 and therefore it looks like this model wi
 
 * **Best Lambda:** 0.044
 * **Test RMSE Ridge:** $21,646.23
-* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 
 The Ridge Regression model and the least squares model perform pretty much identically on a validation set at lamda = 0.044. They both significantly beat the Null Model that only uses the mean of Sale Price to predict Sale Price but essentially they are pretty much the same model.
@@ -579,7 +582,7 @@ The Lasso model with the lowest cross validation error rate is a model with 71 p
 
 * **Best Lambda:** 0.0039
 * **Test RMSE Lasso:** $20,248.17
-* **Test RMSE Least Squares:** $21,543.60
+* **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 * **Count of Non-Zero Coefficients:** 71
 
@@ -589,14 +592,14 @@ Although this helps with inference and interpretibility because of having fewer 
 ####Principle Components Regression
 The goals of principle components regression is to find principle components of the form  Z = $\sum_{i=1}^n \phi_jX_j$  such that a few principle components can be used to predict the response. The hope is that this will lead to a substantial reduction in variance while only causing a slight increase in bias. Note that each principle component is a linear cobination of all the predictors. We want this method to outperform the Least Squares. This has an advantage over Least Squares in that it will have a lower variance but it will have a higher bias because we are assuming a simpler model. 
 
-We fit a Principle Components Regression model (with scale = TRUE to regularize the data) and used cross validation to determine the optimal number of principal components. Below is a plot of this model fit. After finding the optimal number of components we fit a new model only on a training data set and then used a validation set to assess the accuracy of a PCR model with 30 components. Below is a description of the results.
+We fit a Principle Components Regression model (with scale = TRUE to regularize the data) and used cross validation to determine the optimal number of principal components. Below is a plot of this model fit. After finding the optimal number of components we fit a new model only on a training data set and then used a validation set to assess the accuracy of a PCR model with 10 principle components. Below is a description of the results.
 
-* **Optimal Number of Principle Components:** 30
-* **Test RMSE PCR:** $25,735.92
-* **Test RMSE Least Squares:** $21,543.60
+* **Optimal Number of Principle Components:** 10
+* **Test RMSE PCR:** $27,601.17
+* **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 
-Unfortunately again we see that the decrease in variance from a dimension reduction method does not help us. Our model does not appear to have high variance issues. This is reasonable because our number of observations is significantly higher than the number of predictors. Hopefully we will have better results with methods that reduce bias.
+Unfortunately again we see that the decrease in variance from a dimension reduction method does not help our predictions. It appears that the increase in bias outweighs the decrease in variance. It appears like some of our predictors may be non-linear and our model is suffereing from too much bias. Hopefully we will have better results with methods that reduce bias.
 
 ```{r, PCR, include=FALSE, echo=FALSE}
 set.seed(1)
@@ -605,16 +608,125 @@ pcr.fit = pcr(SalePrice ~., data = cleanData, scale = TRUE, validation = "CV")
 #summary(pcr.fit)
 
 #Validation Set Results
-pcr.fittrain = pcr(SalePrice ~., data = cleanData, subset = train, scale = TRUE, validation = "CV")
-pcr.pred = predict(pcr.fittrain, x[test,], ncomp = 170)
-mean((exp(pcr.pred) - exp(y.test))^2)^(1/2)
+sample <- sample.int(n = nrow(subSetData), size = floor(.75*nrow(subSetData)), replace = F)
+train.pcr <- cleanData[sample, ]
+test.pcr  <- subSetData[-sample, ]
+pcr.fittrain = pcr(SalePrice ~., data = train.pcr, scale = TRUE)
+pcr.pred = predict(pcr.fittrain, test.pcr, ncomp = 10)
+mean((exp(pcr.pred) - exp(test.pcr$SalePrice))^2)^(1/2)
 ```
 
 ```{r, PCR Plots, echo=FALSE}
 validationplot(pcr.fit, val.type = "MSEP")
 ```
 
+#Moving Beyond Linearity
+The goal of this section was to see if we could beat our Lasso prediction accuracy by fitting more complex functions to the predictors using a Generalized Additive Model and appropriate basis functions. We used the predictors that had Non-Zero coefficients in our best Lasso Model. The equation for the Generalized Additive Model is $y_i = \beta_0+\sum_{j=1}^pf_j(x_ij) + \epsilon_i$. Are hope was that by fitting non-linear functions of the predictors we can increase our models flexibility for some predictors and therefore reduce the overall bias. Unfortunately this did not help a lot. Below is a comparison of our models accuracy. We tried a lot of different basis functions for the predictors and the best cross Validation error rate we acheived was $19,787.60. Below is a graph of the predictor "Year Built" which did appear to imrpove by fitting a Natural Cubic Spline to it. Unfortunately there were not a lot of other variables that improved over their Linear Least Squares fits. 
 
+* **Test RMSE GAM:** $19,787.60
+* **Test RMSE Lasso:** $20,248.17
+* **Test RMSE Full MLR:** $21,767.80
+* **Test RMSE Null Model:** $79,513.67
+
+```{r GAM setup, include=FALSE, echo=FALSE}
+set.seed(1)
+#Create new data from from Lasso data frame
+LassoBestCoef = coef(lasso.mod, s = bestLassoLambda)
+GAM.predictors = LassoBestCoef@Dimnames[[1]][which(LassoBestCoef != 0)]
+#GAM.predictors
+GAM.predictors = GAM.predictors[-1]
+#GAM.predictors
+GAM.data = cleanData[names(cleanData)[names(cleanData) %in% GAM.predictors]]
+GAM.data$SalePrice = cleanData$SalePrice
+
+##Create Train and Test Data
+sample <- sample.int(n = nrow(GAM.data), size = floor(.75*nrow(GAM.data)), replace = F)
+train.GAM <- GAM.data[sample, ]
+test.GAM  <- GAM.data[-sample, ]
+```
+
+```{r GAM Model, include=FALSE, echo=FALSE}
+#GAM Model
+GAM.model = gam(SalePrice ~ ns(LotFrontage,3) +
+                            ns(LotArea,3) +
+                            ns(YearBuilt, 3) +
+                            ns(YearRemodAdd,3) +
+                            ns(BsmtFinSF1, 3) +
+                            ns(TotalBsmtSF, 3) +
+                            ns(GrLivArea, 3) +  
+                            ns(WoodDeckSF, 3) +
+                            ns(OpenPorchSF, 3) +
+                            OverallQual +
+                            OverallCond +
+                            ExterQual +
+                            BsmtQual +
+                            HeatingQC +
+                            CentralAir +
+                            BsmtFullBath +
+                            KitchenAbvGr +
+                            KitchenQual +
+                            Functional +
+                            FireplaceQu +
+                            GarageFinish +
+                            GarageCars +
+                            GarageQual +
+                            PavedDrive +
+                            MSZoning.FV +
+                            MSZoning.RM +
+                            Alley.Pave +
+                            LotConfig.CulDSac+
+                            Neighborhood.BrDale+
+                            Neighborhood.BrkSide+
+                            Neighborhood.ClearCr+
+                            Neighborhood.Crawfor+
+                            Neighborhood.Edwards+
+                            Neighborhood.MeadowV+
+                            Neighborhood.Mitchel+
+                            Neighborhood.NridgHt+
+                            Neighborhood.OldTown+
+                            Neighborhood.Somerst+
+                            Neighborhood.StoneBr+
+                            Neighborhood.Veenker+
+                            Condition1.Artery+
+                            Condition1.Norm+
+                            Condition1.RRAe+
+                            Exterior1st.MetalSd+
+                            Exterior1st.HdBoard+
+                            Exterior1st.BrkFace+
+                            BldgType.Twnhs+
+                            BldgType.1Fam+
+                            MasVnrType.Stone+
+                            Foundation.BrkTil+
+                            Foundation.PConc+
+                            BsmtExposure.Gd+
+                            BsmtExposure.No+
+                            BsmtFinType1.GLQ+
+                            BsmtFinType1.Unf+
+                            BsmtFinType2.ALQ+
+                            BsmtFinType2.BLQ+
+                            Electrical.FuseA+
+                            Fence.GdWo+
+                            Fence.None+
+                            SaleType.COD+
+                            SaleType.New+
+                            SaleType.WD+
+                            SaleCondition.Abnorml 
+                            , data = train.GAM )
+
+#Predict and get RMSE
+preds = predict(GAM.model, newdata = test.GAM)
+mean((exp(preds) - exp(test.GAM$SalePrice))^2)^(1/2)
+```
+```{r Plot Attempt, echo=FALSE}
+fit.YearBuilt = lm(SalePrice ~ ns(YearBuilt, 3), data = GAM.data)
+YearBuilt.lims = range(GAM.data$YearBuilt)
+YearBuilt.grid = seq(from = YearBuilt.lims[1], to = YearBuilt.lims[2])
+pred = predict(fit.YearBuilt, newdata = list(YearBuilt=YearBuilt.grid), se=T)
+plot(GAM.data$YearBuilt, GAM.data$SalePrice, xlab = "Year Built", ylab = "log(SalePrice)" )
+lines(YearBuilt.grid, pred$fit, col ="blue", lwd=2)
+lines(YearBuilt.grid, pred$fit + 2*pred$se, lty="dashed", col = "red")
+lines(YearBuilt.grid, pred$fit - 2*pred$se, lty="dashed", col = "red")
+```
 
 
 

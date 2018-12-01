@@ -1,4 +1,3 @@
----
 title: "Housing Data Project"
 author: "Justin Sheldon, Jeremy Swiatek"
 date: "October 24, 2018"
@@ -27,13 +26,15 @@ library(glmnet)
 library(pls)
 library(psych)
 library(gam)
-library(splines)
+summary(baselibrary(splines)
 ```
-#Abstract
-The puprose of this project is to predict the "Sale Price" of a house using some or all of the 79 explanatory variables in our data set. We used (name the different models used once we are finished) to find the model with the best predictive power.(talk a little about our best model). In addition to predicting "Sale Price" we also isolated (list of significant variables) that had the highest impact of Sale Price. (Talk about each and how it effect Sale Price). In conclusion we now know a little bit more about what effects the sale price of a house and can make more informed decisions on the biggest purchase most people make in their lifetime.
-
 #Introduction
 Location, Location, Location, is that all you really need to know about housing to make an informed decision on the value of a house? Being an informed consumer is always a good idea but especially on the largest purchase you will probably make in your lifetime. The goal of this project is to be able to predict the sale price of a house with a reasonably good accuracy. Just as important, if not more so, we also want to gain a deeper understanding of the relationship between different factors and the sale price of a house.
+
+The puprose of this project is to predict the "Sale Price" of a house using  79 predictor variables in our data set ranging from Lot area and shape to neighborhood and year biult. The response variable we are trying to predict is Sales Price using some of the 79 predictor variables that we find to be significant in the data. We will use techniques from the Introduction to Statistcial Learning book to perform different trypes of regression on the data to make a prediction on Sales Price.
+
+#The Goal
+We want to clean the data so that we have a proper model that gives good predictions of Sales price. We want to use (name the different models used once we are finished) to find the model with the best predictive power. In addition to predicting Sale Price using generalized linear regression, we want to isolated significant variables to see which had the highest impact on Sale Price. We also want to see which variables aren't significant and find an explanation for why it doesn't affect the data.
 
 Another goal of this project is to learn more about and get experience with the different statistical learning methods we have covered in class this semester. We plan to try out a lot of the methods we covered in class this semester and discuss the strengths and weaknesses of each method as it pertains to our data set. Therefore this project will be broken up into sections for each of the different methods. There is a table of contents to the right that you can click to jump to any section you want to look at. We will try to keep each section as self contained as possible.
 
@@ -319,7 +320,7 @@ cleanData = cleanData[-c(524,1299),]
 
 
 #Multiple Linear Regression
-The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. 
+The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. By using the aov we can look at the main effects of each variable on the model to see which variables are most important and we did the model without aov to get a prediction model. 
 
 * 10 Fold Cross Valiation RMSE: $21,767.80
 
@@ -332,7 +333,30 @@ test.mlr  <- cleanData[-sample, ]
 baseModel = glm(SalePrice ~ ., data = train.mlr)
 mlr.pred = predict(baseModel, newdata = test.mlr)
 mean((exp(mlr.pred) - exp(test.mlr$SalePrice))^2)^(1/2)
+summary(aov(baseModel))
+summary(baseModel)
 ```
+##Model Assumptions
+Here we are assuming that independance, Normality, and constant variance are true. Independance is the only assumption that is "forced" to be true becasue we are saying that each indiviudual house is not affected by the homes around it. We know that in general this is not true becasue the area people live in tends to affect how their home looks, however we can assume indepedance for the reason that every home is individual, seperate, and different that the ones around it. Normailiy and constant varience are much easier to say that their okay here becasue the distribution of homes and home prices is constant and their are very few outliers in the data set. Therefore all assumptions are met for the purpose of the model.
+
+##Not Significant variables
+Variables that weren't significant in Model: MSSubClass, ExterCond, BsmtCond, BsmtHalfBath, FullBath, FireplaceQu, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, PoolArea, PoolQC, MiscVal, MoSold, YrSold, MSZoning.RH, Alley.Grvl, Alley.None, LandContour.Bnk, LandContour.Low, LotConfig.Corner, LotConfig.FR2, LotConfig.Inside, Neighborhood.Blmngtn, Neighborhood.BrDale, Neighborhood.BrkSide, Neighborhood.CollgCr, Neighborhood.Edwards, Neighborhood.Gilbert, Neighborhood.IDOTRR, Neighborhood.Mitchel, Neighborhood.NAmes, Neighborhood.NoRidge, Neighborhood.OldTown, Neighborhood.Sawyer, Neighborhood.Somerst, Neighborhood.SWISU, Neighborhood.Timber, Condition1.PosN, Condition1.RRAn, Condition1.Feedr, BldgType.1Fam, BldgType.Duplex, HouseStyle.1.5Fin, HouseStyle.1.5Unf, HouseStyle.1Story, HouseStyle.2.5Unf, HouseStyle.2Story, HouseStyle.SFoyer, RoofStyle.Flat, RoofStyle.Gable, RoofStyle.Gambrel, RoofStyle.Hip, Exterior1st.AsbShng, Exterior1st.CemntBd, Exterior1st.HdBoard, Exterior1st.Plywood, Exterior1st.Stucco, Exterior1st.VinylSd, Exterior1st.WdShing, Exterior1st.Wd Sdng, Exterior2nd.AsbShng, Exterior2nd.CmentBd, Exterior2nd.HdBoard, Exterior2nd.ImStucc, Exterior2nd.MetalSd, Exterior2nd.Plywood, Exterior2nd.Stucco, Exterior2nd.VinylSd, Exterior2nd.Wd Shng, MasVnrType.BrkFace, Foundation.CBlock, Foundation.PConc, Foundation.Slab, BsmtExposure.Av, BsmtExposure.Mn, BsmtExposure.No, BsmtFinType1.ALQ, BsmtFinType1.BLQ, BsmtFinType1.GLQ, BsmtFinType1.LwQ, BsmtFinType1.Rec, BsmtFinType2.ALQ, BsmtFinType2.GLQ, BsmtFinType2.LwQ, BsmtFinType2.Rec, Electrical.FuseA, Electrical.FuseF, Electrical.SBrkr, GarageType.Attchd, GarageType.Basment, GarageType.BuiltIn, GarageType.Detchd, GarageType.None, Fence.GdPrv, Fence.MnPrv, Fence.MnWw, SaleType.COD, SaleType.WD, SaleCondition.Alloca, SaleCondition.Partial, SaleCondition.Normal
+
+Based on the variables that weren't sigificant in the model there is a trend between variables related to housing exterior, Neighborhood, basement type, and garage type. This most likely occurs becasue in this area many of the homes are very similar meaning they could have very similar exteriors and each neighborhood could have housese that look very similar. This is what we would expect in smaller communities, a smaller variance in the types of homes in the area (more homes are about the same with a few very wealthy ones and few in worse "poorer" quality). Based on this we could expect that variables that are very similar in nature are discribing about the ame things so we don't need every version of the variable to make a prediction of sales price.
+
+##Significant Variables
+All othe models not include above were more significant and add significant infromation to the model. In order for a variable to be significant in the model the p-value has to be less than our type 1 error of .05. These variables are most important beacsue they provide the model with infromation that will make predicting more accurate beacsue they're the most informative variables. Vaiables like OverallCond and OverallQual are considered significant becasue they provide information on the quality/condition of the home which most people would consider to be important factors.
+
+##Prediction Model
+Using the summary of our model we got the intercepts of each variables so that we can use the data to make a prediction on sales price. In order to make the best model we excluded all the variables above that weren't significant in the data becasue we don't want redundancy in the model and we don't want to overfit the data when predicting.
+
+###The Model
+9.282 + (.00044)LotFrontage + (.0000019)LotArea + (.04577)OverallQual + (.03728)OverallCond + (.001533)YearBiult + (.0007532)YearRemodAdd +...+ (-.1391)SaleCondition.Abnorml + (-.06048)SaleCondition.Family
+
+The 9.282 is our Beta0, it's the intercept of the model that tells us where to start for all homes in the area, and theoretically if all the variables were equal to 0 our home price would be 9.282. The numbers in the parenthesis are the individual Beta's associated with interpects for each variable. They each predict the individual affect of each variable and for every one unit increase in the variable it goes up by that intercept. In this case we have many variables that could have very high numbers which could be why we get such low beta's or it could be due to having many variables in the data that all the significant variables are putting in a little bit of infromation.
+
+###Model Accuracy
+By taking out all the non-significant variables in the data we know that our model is more accurate than with them in it. Since we got a very low AIC of -1688 we know the model is at the desired level of prediction on the fewest variables possible so we know we have the best model. So, due to the low AIC and high sample size of data we know that this is the best and most accurate model that we could have produced to predict Sale Price.
 
 ##  Potential Problems
 
@@ -727,6 +751,5 @@ lines(YearBuilt.grid, pred$fit, col ="blue", lwd=2)
 lines(YearBuilt.grid, pred$fit + 2*pred$se, lty="dashed", col = "red")
 lines(YearBuilt.grid, pred$fit - 2*pred$se, lty="dashed", col = "red")
 ```
-
 
 

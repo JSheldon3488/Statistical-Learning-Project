@@ -1,3 +1,4 @@
+---
 title: "Housing Data Project"
 author: "Justin Sheldon, Jeremy Swiatek"
 date: "October 24, 2018"
@@ -5,7 +6,7 @@ output:
   html_document:
     toc: true
     toc_float: true
-    toc_depth: 3
+    toc_depth: 2
     theme: united
     highlight: tango
     keep_tex: true
@@ -26,28 +27,84 @@ library(glmnet)
 library(pls)
 library(psych)
 library(gam)
-summary(baselibrary(splines)
+library(splines)
+library(corrplot)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
 ```
+
 #Introduction
-Location, Location, Location, is that all you really need to know about housing to make an informed decision on the value of a house? Being an informed consumer is always a good idea but especially on the largest purchase you will probably make in your lifetime. The goal of this project is to be able to predict the sale price of a house with a reasonably good accuracy. Just as important, if not more so, we also want to gain a deeper understanding of the relationship between different factors and the sale price of a house.
+Location, Location, Location, is that all you really need to know about housing to make an informed decision on the value of a house? Being an informed consumer is always a good idea but especially on the largest purchase you will probably make in your lifetime. We have two goals for this project. The first goal is to be able to predict the sale price of a house with reasonably good accuracy. The second goal is to understand how different characteristics of a house affect the overall sale pice.
+ 
+The response variable is "Sales Price" which is just the final sale price of the house. We have 79 predictor variables (177 after dummy variable creation). There are too many predictor variables to describe them all here but we do go into more detail later in "The Data" section and when we perform subset selection. Check out "The Data" section to see a more detailed description of our response variable, predictor variables, and all the stuff we did to clean this data set and get it ready for modeling.
 
-The puprose of this project is to predict the "Sale Price" of a house using  79 predictor variables in our data set ranging from Lot area and shape to neighborhood and year biult. The response variable we are trying to predict is Sales Price using some of the 79 predictor variables that we find to be significant in the data. We will use techniques from the Introduction to Statistcial Learning book to perform different trypes of regression on the data to make a prediction on Sales Price.
+We used 7 different statistical learning methods that we learned in class this semester to attempt to acheive tha goals stated above. The methods used are Multiple Linear Regression, Forward Stepwise Selection, Backwards Stepwise Selection, Ridge Regression, Lasso, Principle Components Regression, and finally a Generalized Additive Metho where we combined a mix of different smoothing splines on the predictors. Our hope was that as we applied all of these different methods we would get a better feel for the data and see what works, what does not work, and why. 
 
-#The Goal
-We want to clean the data so that we have a proper model that gives good predictions of Sales price. We want to use (name the different models used once we are finished) to find the model with the best predictive power. In addition to predicting Sale Price using generalized linear regression, we want to isolated significant variables to see which had the highest impact on Sale Price. We also want to see which variables aren't significant and find an explanation for why it doesn't affect the data.
+Another goal of this project was to learn more about and gain experience with the different statistical learning methods we have covered in class this semester. This project is broken up into sections for each of the different methods. There is a table of contents to the left that you can click to jump to any section you want to look at. We briefly summarize our findings below.
 
-Another goal of this project is to learn more about and get experience with the different statistical learning methods we have covered in class this semester. We plan to try out a lot of the methods we covered in class this semester and discuss the strengths and weaknesses of each method as it pertains to our data set. Therefore this project will be broken up into sections for each of the different methods. There is a table of contents to the right that you can click to jump to any section you want to look at. We will try to keep each section as self contained as possible.
+**Brief Summary of Conclusions:**
+After all the data cleaning and model fitting we were able to acheive a Test RMSE accuracy of approximately $20,000. Lasso and GAM were the most effective methods we used. The findings in terms of which characteristics of a house affect the overall sale price were very intuitive. Things like house size, quality, and year built all have a positive correlation on the sale price of a house, and living in the worst neighboorhood in the city has a negative effect on the sale price of a house. The most significant predictors were predictors related to the size of the house, the quality of the house and where the house was located.
 
-
-#The Data
-The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. There are 1460 observations in total in the training Data. We did a lot of data cleaning before building any models. Below is everything we did catagorized into sections. After all the data cleaning we ended up with a training set with 1458 observations and 178 variables (after dummy variable creation). This is the training set we will be using for all of our models.
+##The Data
+The dataset we will be using is the House Prices dataset from www.kaggle.com. The Response Variable is SalePrice and there are 79 explanatory variables. There are 1460 observations in total in the training Data. We did a lot of data cleaning before building any models. Below is everything we did catagorized into sections. After all the data cleaning we ended up with a training set with 1458 observations and 178 variables (after dummy variable creation).
 
 ```{r echo = FALSE}
 trainData = read.csv("train.csv", stringsAsFactors = FALSE)
 testData = read.csv("test.csv", stringsAsFactors = FALSE)
 ```
 
-###  Dealing with NA's
+#### **A Look at the Predictors**
+Here is a brief look at some of the predictors that are highly correlated with Sale Price. As you can see from the correlation matrix below intuitive things like Overall Quality, Ground Floor Living Area (in square feet), Total Basement Square Feet, and Year Built are all correlated with Sale Price. Also we can see from the correlation matrix below that we are going to have some multicollinearity issues. Garage Cars and Garage Area have a correlation of 0.88 which makes sense because obviously the bigger your garage the more cars you can fit in it. These highly correlated predictors are going to cause us problems when we build models and therefore we dealth with them in the section below called "Dealing with Multicollinearity."
+
+```{r Correlation Plot, echo=FALSE}
+numericVars <- which(sapply(trainData, is.numeric))
+numericVarNames <- names(numericVars)
+all_numVar <- trainData[, numericVars]
+cor_numVar <- cor(all_numVar, use="pairwise.complete.obs")
+cor_sorted <- as.matrix(sort(cor_numVar[,'SalePrice'], decreasing = TRUE))
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)>0.5)))
+cor_numVar <- cor_numVar[CorHigh, CorHigh]
+corrplot.mixed(cor_numVar, tl.col="black", tl.pos = "lt")
+```
+
+#### **Regularization of predictors**
+We converted all the numeric predictors that has a skewness rating of greater then absolute value of 1 by taking the log of them. This had the effect of removing any skewed tails and effectively normailzing the predictors.
+
+
+#### **Dealing with Skewed Response Variable**
+
+The response variable SalePrice was heavily right skewed. We fixed this with a log transformation. Below is a couple before and after graphs showing the results. We will be using the log(SalePrice) as our predictor variable in our models.
+
+```{r Create Log Sale Price Data Frame, include=FALSE, echo=FALSE}
+train.before = trainData
+trainData$SalePrice = log(trainData$SalePrice)
+```
+```{r Plot of SalePrice vs. Normal Distribution , echo=FALSE , fig.align = "center", fig.height = 4, fig.width = 6}
+p1 = ggplot(train.before, aes(x=SalePrice)) +
+        geom_histogram(aes(y = ..density..), fill="#00468B", binwidth = 10000) +
+        stat_function(fun = dnorm, args = list(mean(train.before$SalePrice),sd(train.before$SalePrice)), colour = "red", lwd = 1) +
+        scale_x_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000")) +
+        labs(title = "SalePrice vs. Normal Distribution")
+
+p2 = ggplot(trainData, aes(x=SalePrice)) +
+        geom_histogram(aes(y = ..density..), fill="#00468B", binwidth = .15) +
+        stat_function(fun = dnorm, args = list(mean(trainData$SalePrice),sd(trainData$SalePrice)), colour = "red", lwd = 1) +
+        scale_x_continuous(breaks= seq(10, 14, by=.5)) +
+        labs(title = "Log SalePrice vs. Normal Distribution")
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
+```
+```{r QQ Plots, echo=FALSE, fig.height = 5, fig.width = 7, fig.align = "center"}
+#QQ PLots
+par(mfrow = c(1,2))
+qqnorm(train.before$SalePrice, main = "Sale Price QQ Plot")
+qqline(train.before$SalePrice)
+qqnorm(trainData$SalePrice, main = "Log Sale Price QQ Plot")
+qqline(trainData$SalePrice)
+```
+
+####  **Dealing with NA's**
 Upon further inspection of the data we noticed we had some variables that were causing us trouble. There are 19 variables with missing data. For a lot of the categorical variables "NA's" really meant "None" so we fixed those by converting NA level to a "None" level. There was also a couple of observations that had one missing value for a given variable and we just fixed that by predicting the mean/mode of that variable for that observation. Any other additional modification is listed below along with the reason why we choose that modification.
 
 * **LotFrontage:** Linear Feet of street connected to property. This one was a tough decision. It's missing 259/1460 approximately 18% of the data for this variable but we didnt want to lose the variable entirely. We decided to fill in the NA's with the mean value of the variable.
@@ -175,7 +232,7 @@ charVariables = names(trainData[,sapply(trainData, is.character)])
 charVariables
 ```
 
-###  Dealing with Multicollinearity
+####  **Dealing with Multicollinearity**
 We decided to just deal with multicollinearity issues before building any models. We checked the correlation matrix for all numeric variables and decided to remove any pair of variables with a correlation of 0.75 or higher. Of the two variables we kept Whichever variable had a higher correlation with SalePrice. Below is a list of all of these pairs and which variables we kept.
 
 * **Garage Yr Blt vs. Year Built:** correlation = 0.845. We kept Year Built
@@ -223,7 +280,7 @@ trainData = subset(trainData, select = -TotRmsAbvGrd)
 #dim(trainData)
 ```
 
-###  Dealing with Sparse Data
+####  **Dealing with Sparse Data**
 Some of our factor variables had levels with a count of less then 5. This was causing problems with using cross validation. Below is a list of all the variables that had this issue and how we dealth with them.
 
 * **Utilities:** Type of utilities available. 2 levels with more than 99% of the data belonging to one level. We removed this variable.
@@ -264,65 +321,51 @@ DFnumeric = trainData[,!(names(trainData) %in% factorVars)]
 trainDF.dummies = cbind(DFnumeric, DFdummies)
 ```
 
-
-
-###  Dealing with Skewed Response Variable
-The response variable SalePrice was heavily right skewed. We fixed this with a log transformation. Below is a couple before and after graphs showing the results. We will be using the log(SalePrice) as our predictor variable in our models.
-
-```{r Create Log Sale Price Data Frame, include=FALSE, echo=FALSE}
-trainDF.log = trainDF.dummies
-trainDF.log$SalePrice = log(trainDF.log$SalePrice)
-```
-```{r Plot of SalePrice vs. Normal Distribution , echo=FALSE , fig.align = "center", fig.height = 5, fig.width = 7}
-p1 = ggplot(trainDF.dummies, aes(x=SalePrice)) +
-        geom_histogram(aes(y = ..density..), fill="blue", binwidth = 10000) +
-        stat_function(fun = dnorm, args = list(mean(trainDF.dummies$SalePrice),sd(trainDF.dummies$SalePrice)), colour = "red", lwd = 1) +
-        scale_x_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000")) +
-        labs(title = "SalePrice vs. Normal Distribution")
-
-p2 = ggplot(trainDF.log, aes(x=SalePrice)) +
-        geom_histogram(aes(y = ..density..), fill="blue", binwidth = .15) +
-        stat_function(fun = dnorm, args = list(mean(trainDF.log$SalePrice),sd(trainDF.log$SalePrice)), colour = "red", lwd = 1) +
-        scale_x_continuous(breaks= seq(10, 14, by=.5)) +
-        labs(title = "Log SalePrice vs. Normal Distribution")
-
-grid.arrange(p1, p2, nrow = 1, ncol = 2)
-```
-```{r QQ Plots, echo=FALSE, fig.height = 5, fig.width = 7, fig.align = "center"}
-#QQ PLots
-par(mfrow = c(1,2))
-qqnorm(trainDF.dummies$SalePrice, main = "Sale Price QQ Plot")
-qqline(trainDF.dummies$SalePrice)
-qqnorm(trainDF.log$SalePrice, main = "Log Sale Price QQ Plot")
-qqline(trainDF.log$SalePrice)
-```
-
-### Regularization of predictors
-We converted all the numeric predictors that has a skewness rating of greater then absolute value of 1 by taking the log of them. This had the effect of removing any skewed tails and effectively normailzing the predictors.
-
-
-### Dealing with Outliers
+#### **Dealing with Outliers**
 The only outliers we found were observations 524 and 1299. We deemed these outliers significant enough to remove because they were huge houses with a overall quality rating of 10 (the highest rating) and yet they sold for a very low price. By looking at the size and quality rating of the house if appears they may have missed a 0 on the end of the price. Size of the house (GrLiveArea) and Overall Quality are the two highest positive correlated variables with SalePrice which lead us to believe these SalePrices were a mistake and we removed these observations from the data set. We left the graphs below in terms of the actual Sale Price and not log of the Sale Price so it would be easier to interpret
 
-```{r Finding Outliers, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6, comment=""}
-ggplot(data=trainDF.dummies[!is.na(trainDF.dummies$SalePrice),], aes(x=GrLivArea, y=SalePrice))+
-        geom_point(col='blue') + geom_smooth(method = "lm", se=FALSE, color="red", aes(group=1)) +
+```{r Finding Outliers, echo=FALSE, fig.align = "center", fig.height = 3.5, fig.width = 6, comment=""}
+ggplot(data=train.before[!is.na(train.before$SalePrice),], aes(x=GrLivArea, y=SalePrice))+
+        geom_point(col='#00468B') + geom_smooth(method = "lm", se=FALSE, color="red", aes(group=1)) +
         scale_y_continuous(breaks= seq(0, 800000, by=200000), labels = c("0", "200,000", "400,000","600,000","800,000") ) +
-        geom_text_repel(aes(label = ifelse(trainDF.dummies$GrLivArea[!is.na(trainDF.dummies$SalePrice)]>4500, rownames(trainDF.dummies), '')))
-trainDF.dummies[c(524, 1299), c('SalePrice', 'GrLivArea', 'OverallQual')]
+        geom_text_repel(aes(label = ifelse(trainData$GrLivArea[!is.na(trainData$SalePrice)]>4500, rownames(trainData), '')))
+train.before[c(524, 1299), c('SalePrice', 'GrLivArea', 'OverallQual')]
 ```
 
 ```{r final Data to be used for models, echo=FALSE, include=FALSE}
 #Use cleanData for all future models
-cleanData = trainDF.log
+cleanData = trainDF.dummies
 cleanData = cleanData[-c(524,1299),]
 ```
 
+#                                                   Methods Section
 
-#Multiple Linear Regression
-The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. By using the aov we can look at the main effects of each variable on the model to see which variables are most important and we did the model without aov to get a prediction model. 
 
-* 10 Fold Cross Valiation RMSE: $21,767.80
+##Multiple Linear Regression
+The main purpose of building a Multiple Linear Regression model is to use it as a benchmark that we compare all future models to. Below is a brief summary of our Multiple Linear Regression model that includes all variables in the model fit. The model euqation will be in the form $Y = \beta_0 +\sum_{i=1}^p \beta_i X_i + \epsilon$. This is just the general form the equation will be in. There are 177 predictors and coefficients so we did not write out the entire model equation here. Also we cover the model assumptions and the potential problems this model may have below.
+
+**Model Accuracy**
+*We change log(SalePrice) back into Sale Price so that it is easier to interpret the results.
+
+
+* **10 Fold Cross Valiation RMSE:** $21,767.80
+* **Adjusted R-Squared:** 0.9311
+* **Test RMSE Null Model:** $79,513.67
+
+
+**Most Significant Variables**
+
+* **OverallQual:** Rates the overall material and finish of the house.
+* **OverallCond:** Rates the overall condition of the house.
+* **YearBuilt:** Original Construction Date.
+* **LotArea:** Lot size in Square Feet.
+* **GarageCars:** Size of Garage in car capacity
+* **HeatingQC:** Heating Quality and Condition Rating.
+* **Neighborhood.MeadowV :** Neighboorhood Meadow Village
+* **BsmtUnfSF :** Unfinished square feet of basement area
+* **GrLivArea :** Above Ground Living Area in Square Feet.
+
+
 
 ```{r, Base Model, echo=FALSE, include=FALSE}
 #Just use this model for Potential Problems Section
@@ -330,62 +373,50 @@ set.seed(88)
 sample <- sample.int(n = nrow(cleanData), size = floor(.75*nrow(cleanData)), replace = F)
 train.mlr <- cleanData[sample, ]
 test.mlr  <- cleanData[-sample, ]
-baseModel = glm(SalePrice ~ ., data = train.mlr)
+baseModel = lm(SalePrice ~ ., data = train.mlr)
 mlr.pred = predict(baseModel, newdata = test.mlr)
 mean((exp(mlr.pred) - exp(test.mlr$SalePrice))^2)^(1/2)
-summary(aov(baseModel))
-summary(baseModel)
-```
-##Model Assumptions
-Here we are assuming that independance, Normality, and constant variance are true. Independance is the only assumption that is "forced" to be true becasue we are saying that each indiviudual house is not affected by the homes around it. We know that in general this is not true becasue the area people live in tends to affect how their home looks, however we can assume indepedance for the reason that every home is individual, seperate, and different that the ones around it. Normailiy and constant varience are much easier to say that their okay here becasue the distribution of homes and home prices is constant and their are very few outliers in the data set. Therefore all assumptions are met for the purpose of the model.
-
-##Not Significant variables
-Variables that weren't significant in Model: MSSubClass, ExterCond, BsmtCond, BsmtHalfBath, FullBath, FireplaceQu, WoodDeckSF, OpenPorchSF, EnclosedPorch, X3SsnPorch, PoolArea, PoolQC, MiscVal, MoSold, YrSold, MSZoning.RH, Alley.Grvl, Alley.None, LandContour.Bnk, LandContour.Low, LotConfig.Corner, LotConfig.FR2, LotConfig.Inside, Neighborhood.Blmngtn, Neighborhood.BrDale, Neighborhood.BrkSide, Neighborhood.CollgCr, Neighborhood.Edwards, Neighborhood.Gilbert, Neighborhood.IDOTRR, Neighborhood.Mitchel, Neighborhood.NAmes, Neighborhood.NoRidge, Neighborhood.OldTown, Neighborhood.Sawyer, Neighborhood.Somerst, Neighborhood.SWISU, Neighborhood.Timber, Condition1.PosN, Condition1.RRAn, Condition1.Feedr, BldgType.1Fam, BldgType.Duplex, HouseStyle.1.5Fin, HouseStyle.1.5Unf, HouseStyle.1Story, HouseStyle.2.5Unf, HouseStyle.2Story, HouseStyle.SFoyer, RoofStyle.Flat, RoofStyle.Gable, RoofStyle.Gambrel, RoofStyle.Hip, Exterior1st.AsbShng, Exterior1st.CemntBd, Exterior1st.HdBoard, Exterior1st.Plywood, Exterior1st.Stucco, Exterior1st.VinylSd, Exterior1st.WdShing, Exterior1st.Wd Sdng, Exterior2nd.AsbShng, Exterior2nd.CmentBd, Exterior2nd.HdBoard, Exterior2nd.ImStucc, Exterior2nd.MetalSd, Exterior2nd.Plywood, Exterior2nd.Stucco, Exterior2nd.VinylSd, Exterior2nd.Wd Shng, MasVnrType.BrkFace, Foundation.CBlock, Foundation.PConc, Foundation.Slab, BsmtExposure.Av, BsmtExposure.Mn, BsmtExposure.No, BsmtFinType1.ALQ, BsmtFinType1.BLQ, BsmtFinType1.GLQ, BsmtFinType1.LwQ, BsmtFinType1.Rec, BsmtFinType2.ALQ, BsmtFinType2.GLQ, BsmtFinType2.LwQ, BsmtFinType2.Rec, Electrical.FuseA, Electrical.FuseF, Electrical.SBrkr, GarageType.Attchd, GarageType.Basment, GarageType.BuiltIn, GarageType.Detchd, GarageType.None, Fence.GdPrv, Fence.MnPrv, Fence.MnWw, SaleType.COD, SaleType.WD, SaleCondition.Alloca, SaleCondition.Partial, SaleCondition.Normal
-
-Based on the variables that weren't sigificant in the model there is a trend between variables related to housing exterior, Neighborhood, basement type, and garage type. This most likely occurs becasue in this area many of the homes are very similar meaning they could have very similar exteriors and each neighborhood could have housese that look very similar. This is what we would expect in smaller communities, a smaller variance in the types of homes in the area (more homes are about the same with a few very wealthy ones and few in worse "poorer" quality). Based on this we could expect that variables that are very similar in nature are discribing about the ame things so we don't need every version of the variable to make a prediction of sales price.
-
-##Significant Variables
-All othe models not include above were more significant and add significant infromation to the model. In order for a variable to be significant in the model the p-value has to be less than our type 1 error of .05. These variables are most important beacsue they provide the model with infromation that will make predicting more accurate beacsue they're the most informative variables. Vaiables like OverallCond and OverallQual are considered significant becasue they provide information on the quality/condition of the home which most people would consider to be important factors.
-
-##Prediction Model
-Using the summary of our model we got the intercepts of each variables so that we can use the data to make a prediction on sales price. In order to make the best model we excluded all the variables above that weren't significant in the data becasue we don't want redundancy in the model and we don't want to overfit the data when predicting.
-
-###The Model
-9.282 + (.00044)LotFrontage + (.0000019)LotArea + (.04577)OverallQual + (.03728)OverallCond + (.001533)YearBiult + (.0007532)YearRemodAdd +...+ (-.1391)SaleCondition.Abnorml + (-.06048)SaleCondition.Family
-
-The 9.282 is our Beta0, it's the intercept of the model that tells us where to start for all homes in the area, and theoretically if all the variables were equal to 0 our home price would be 9.282. The numbers in the parenthesis are the individual Beta's associated with interpects for each variable. They each predict the individual affect of each variable and for every one unit increase in the variable it goes up by that intercept. In this case we have many variables that could have very high numbers which could be why we get such low beta's or it could be due to having many variables in the data that all the significant variables are putting in a little bit of infromation.
-
-###Model Accuracy
-By taking out all the non-significant variables in the data we know that our model is more accurate than with them in it. Since we got a very low AIC of -1688 we know the model is at the desired level of prediction on the fewest variables possible so we know we have the best model. So, due to the low AIC and high sample size of data we know that this is the best and most accurate model that we could have produced to predict Sale Price.
-
-##  Potential Problems
-
-####     Residual Plots
-From the Residual plots it appears as if a linear model may not be a good representation of the data. We plan to try out some Model selection and regularization methods and see if this pattern still exists. If so we will use non-linear methods.
-
-```{r, Model Residuals, echo=FALSE, include=FALSE}
-par(mfrow= c(2,2))
-plot(baseModel)
 ```
 
-####     Model Outliers
-After looking at the residual plot we noticed there are 10 outliers that may be influencing the model fit. The points influncing the data are listed below. We will keep an eye on these observations in future models and see if they continue to be a problem. We will deal with them later if we need to.
-```{r, Model Outliers, echo=FALSE, comment=""}
-outlierTest(baseModel)
+###  Model Assumptions
+Below we check the Multiple Linear Regression model assumptions. We also checked these assumptions again on future models but to avoid unnecessary duplication (and boring the reader) we left those parts out of the project.
+
+##### **Linearity and Constant Variance Assumptions**
+From the Residual vs. fitted values plot it appears as if a linearity and constant variance assumptions are valid. I do not see a Non-Linear trend in the residuals and nothing to be too concerned about here. Later on in the project when we tried to improve prediction accuracy by fitting Non-linear functions to the predictors in a GAM we noticed that indeed a lot of the predictors do have a linear realtionship with Sale Price. (This may be part of the reason our Multiple Linear Regression model performs so well). Also we already transformed our Response variable which helped with constant variance.
+
+```{r, Model Residuals, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
+plot(baseModel$fitted.values, baseModel$residuals, ylab = "Residuals", xlab= "Fitted Values", col = "#00468B")
+```
+
+##### **Correlation of Error Terms**
+We do not see any noticable trend present in the error terms. I think it is fine to assume they are uncorrelated and we can trust the standard error and p-value results we obtained in the model. Note that this is only a fraction of the observations. The graphic for all the observations was overly cluttered and hard to interpret. This same trend extends to all the observations. 
+
+```{r Correlation of Error Terms,echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
+plot(c(1:250), baseModel$residuals[1:250], xlab = "Observations", ylab = "Residuals", col = "azure4")
+lines(c(1:250), baseModel$residuals[1:250], col = "#00468B")
+```
+
+#####     **Outliers and High Leverage Points**
+After looking at the Studentized Residuals vs. Leverage plots we do not see any points that have significantly high leverage while also having a large residual value. This leads us to beleive there is not any one observation that is significantly effecting our model fit and accuracy. There are observations with high leverage or high residuals but as long as they do not occur together we are fine to leave these observations in the model.
+
+```{r, Model Outliers, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
+student.residuals = sort(rstudent(baseModel), decreasing = TRUE)
+Leverage = hat(model.matrix(baseModel))
+plot(Leverage ,student.residuals, xlab = "Leverage", ylab = "Studentized Residuals", col="#00468B")
 ```
 
 
 
-#Model Selection and Regularization
+##                                      Model Selection and Regularization
 
-##Subset Selection
-The goal of subset Selection is to try and find the smallest subset of the predictors that are statistically significant and still lead to a good model fit. The advantage to an approach like this over Multiple Linear Regression is that using a subset of the original predictors can lead to a significant reduction in variance while only slightly increasing the bias. Also it simplifies model inference and kind of allows us to see which variables are "most important". Subset Selection still uses Least Squares fits in the form of  $Y = \beta_0 +\sum_{i=1}^p \beta_i X_i + \epsilon$.  Our hope is that a subset selection model will out perform the full model we used in Multiple Linear Regression Section. Below we perform both Forward stepwise Selection and Backwards Stepwise Selection and give more details about the methods used and the results.
+###         Subset Selection
+The goal of subset Selection is to try and find the smallest subset of the predictors that are statistically significant and still lead to a good model fit. The advantage to an approach like this over Multiple Linear Regression is that using a subset of the original predictors can lead to a significant reduction in variance while only slightly increasing the bias and therefore lead to an improvement in prediction accuracy. Subset Selection still uses Least Squares fits with the final model equation in the form of  $Y = \beta_0 +\sum_{i=1}^p \beta_i X_i + \epsilon$.  Our hope is that a subset selection model will out perform the full model we used in Multiple Linear Regression Section. Below we perform both Forward stepwise Selection and Backwards Stepwise Selection and give more details about the methods used and the results.
 
 ```{r Stuff We Need for Subset Selection, include=FALSE, echo=FALSE}
 subSetData = cleanData
 ```
 
-####Forward Stepwise Selection
+#### **Forward Stepwise Selection**
 To perform forward stepwise selection we fit a model that iteratively steps forward adding the next most significant predictor at each iteration. We then used Cross Validation on each model from 1-177 predictors to find the best model size for our data. We also looked at the CP, BIC and Adjusted R^2 scores to decide on the best model size. Below is graphs of all 4 methods we used in picking the best model size.
 
 ```{r, Forward Stepwise Selection, include=FALSE, echo=FALSE}
@@ -414,7 +445,7 @@ pred2 = test.matrix[,names(coefi2)]%*%coefi2
 mean(( exp(test$SalePrice) - exp(pred2) )^2)^(1/2)
 ```
 
-```{r plots to include, echo=FALSE}
+```{r plots to include, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
 #set xlab abd ylab and points
 par(mfrow = c(2,2))
 plot(regfit.fwd.summary$adjr2, type = "l", xlab = "Number of Variables", ylab = "Adjusted R Squared")
@@ -427,19 +458,20 @@ plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of V
 points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
-Forward stepwise Selection revealed that the best model using this method is somewhere around 40-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 50 variables will turn out to be a good model. Below is a report of the model with 50 variables vs the full Least Squares Model.
+Forward stepwise Selection revealed that the best model using this method is somewhere between 30-50 variables in the model. Remember this is not necessarly the best model because forward stepwise can get stuck in a suboptimal path. That being said it appears like around 40 variables will turn out to be a good model. Below is a report of the model with 40 variables vs the full Least Squares Model. We tried all the different model sizes in this range and they all ended up around the same Test RMSE.
 
-* **Best Model Size:** 50
+**Model Accuracy**
+
+* **Best Model Size:** 40
 * **Test RMSE FWD Stepwise Selction:** $22,584.54
 * **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
-*We changed the Sale Price back into dollars instead of log(SalePrice) because it was easier to interpret. Also note this is the Root Mean Squared Error which can be thought of as how close our predictions are on average.
 
-Surprisingly this model did very poorly. As we kept increasing the number of predictors the validation set RMSE kept decreasing. It appears our dataset does not have a problem with high variance and the reduction in variance we gained from a smaller model did not outweigh the increase in bias we incurred from using a smaller model. 
+This model did not outperform the full Multiple Linear Regression model but it performs more or less the same. The benefit we gained over Multiple Linear Regerssion is that this model is easier to interpret while still having a similar prediction accuracy.
 
-The most interesting thing we found from doing forward stepwise was just determining which variables were selected first and therefore are potentially important variables in predicting sale price.
+The most interesting thing we found from doing forward stepwise was just determining which variables were selected first and therefore are potentially the most important variables in predicting sale price.
 
-**First 10 Variables picked in model**
+**First 10 Variables Selected**
 
 * **OverallQual:** Rates the overall material and finish of the house.
 * **BsmtFullBath:** Number of full bathrooms in the basement.
@@ -453,7 +485,7 @@ The most interesting thing we found from doing forward stepwise was just determi
 * **MSZoning.FV:** Dummy Variable for Zoning Code for "Floating Village Residential"
 
 
-####Backwards Stepwise Selection
+#### **Backwards Stepwise Selection**
 The goal, methods and equation for backwards stepwise selection is the same as that of forward stepwise selection so we will not restate them all here.
 
 ```{r, Backwards Stepwise Selection, include=FALSE, echo=FALSE}
@@ -475,12 +507,12 @@ for (i in 1:160){
     pred = test.matrix[,names(coefi)]%*%coefi
     validation.errors[i] = mean((test$SalePrice-pred)^2)
 }
-coefi2 = coef(regfit.valid, id=50)
+coefi2 = coef(regfit.valid, id=40)
 pred2 = test.matrix[,names(coefi2)]%*%coefi2
 mean(( exp(test$SalePrice) - exp(pred2) )^2)^(1/2)
 
 ```
-```{r plots for backstep, echo=FALSE}
+```{r plots for backstep, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
 par(mfrow = c(2,2))
 plot(regfit.back.summary$adjr2, type = "l", xlab = "Number of Variables", ylab = "Adjusted R Squared")
 points(which.max(regfit.back.summary$adjr2), regfit.back.summary$adjr2[which.max(regfit.back.summary$adjr2)], col="red", cex=2,pch=20)
@@ -492,14 +524,17 @@ plot(validation.errors, type = "l", ylab = "Validation MSE", xlab = "Number of V
 points(which.min(validation.errors), validation.errors[which.min(validation.errors)], col="red",cex=2,pch=20)
 ```
 
-Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 40-50 variables seems to be when the graphs begin to flatten out. We decided to build a model with 50 predictors and use a validation set to estimate the RMSE. Below are the results.
+Backwards Stepwise Selection ends up with pretty much the same results as forward stepwise selection. Somewhere between 30-50 variables seems to be when the graphs begin to flatten out. We decided to build a model with 40 predictors and use a validation set to estimate the RMSE. Below are the results.
 
-* **Best Model Size:** 50
-* **Test RMSE FWD Stepwise Selction:** $23341.39
+**Model Accuracy**
+
+* **Best Model Size:** 40
+* **Test RMSE Backwards Stepwise Selction:** $23,581.42
+* **Test RMSE FWD Stepwise Selction:** $22,584.54
 * **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 
-This model outperforms Forward Stepwise Selection but still does not outperform the Full Least Squares model. Again it appears like the reduction in varaiance we gain from fitting a simpler model do not outweigh the increase in bias.
+This models is very close to Forward Stepwise Selection but still does not outperform the Full Least Squares model. It appears like the reduction in varaiance we gain from fitting a simpler model do not outweigh the increase in bias. We see again that we can get similar results in prediction accuracy using a subset of the original predictors, but do not seem to be able to beat that baseline accuracy.
 
 **Last 10 Variables left in model**
 
@@ -514,10 +549,11 @@ This model outperforms Forward Stepwise Selection but still does not outperform 
 * **BsmtFinSF2:** Rating of basment finished area.
 * **Neighborhood.MeadowV:** Neighboorhood location Meadow Village
 
-I think it is interesting to note that both subset selection methods find that having a finished basement with bathrooms seems to be important factor in predicting SalePrice (after accounting for Overall Quality). Also we see that a neighborhood appeared in the top 10 here. The coefficient for this neighborhood is negative so we dug a little deeper to see this neighboorhoods relationship with sale price in comparison to other neighborhoods. As you can see from the plot below Meadown Village has the lowest median sale price of all neighborhoods therefore this coefficient makes sense. Also it makes sense that Meadow Village would be a significant factor in predicting sale price because it appears to be one of the worst neighborhoods in terms of sales price in Ames Iowa.
+#### **Interpreting the Results of Subset Selection**
+This is a breif summary of the results from the subset selection models. We were not able to beat the results of our baseline model but we were able to match them with a subset of the original predictors. It is interesting to note that both subset selection methods find that having a finished basement with bathrooms seems to be important factor in predicting SalePrice (after accounting for Overall Quality). Also we see that a neighborhood dummy variable (MeadowV) appeared in the top 10. Honestly we expected to see a lot more neighborhood dummy variables so we took a deeper look at the neighborhood variable. The coefficient for this neighborhood is negative and as you can see from the plot below Meadown Village has the lowest median sale price of all neighborhoods therefore this coefficient makes sense. Also it makes sense that Meadow Village would be the first significant neighborhood selected as it appears to be one of the worst neighborhoods in terms of sales price in Ames Iowa.
 
-```{r a look at Neighborhoods, echo=FALSE}
-neighbor.plot = ggplot(trainData, aes(Neighborhood, SalePrice)) +
+```{r a look at Neighborhoods, echo=FALSE, fig.align = "center"}
+neighbor.plot = ggplot(train.before, aes(Neighborhood, SalePrice)) +
                 geom_boxplot(aes(fill = factor(Neighborhood)))  +
                 theme(axis.text.x = element_text(angle = 65, vjust = 0.6)) +
                 labs( x = "Neighborhoods", y = "Sale Price") +
@@ -527,8 +563,9 @@ neighbor.plot = ggplot(trainData, aes(Neighborhood, SalePrice)) +
 neighbor.plot
 ```
 
-##Shrinkage Methods
-####Ridge Regression
+###                 Shrinkage Methods
+
+#### **Ridge Regression**
 The goal of Ridge Regression is to find a set of coefficients that minimize  $RSS +\lambda\sum_{j=1}^p \beta^2_j$.  The summation terms works as a shrinkage penalty that incentivises the model to srink the coefficients towards 0. The hope is that by doing this we will significantly reduce model variance while only slightly increasing model bias and therefore be able to outperform the full Least Squares model. 
 
 The equation aboves shrinkage penalty depends on the value of lambda you choose. In order to find the best value for lambda we performed cross validation on a lot of different lambda values. Below is a graph of the coefficients for different levels of lambda along with the best lambda we found using Cross Validation. (note: the function we use to fit the models automatically performs variable regularization)
@@ -555,14 +592,16 @@ ridge.pred = predict(ridge.mod, s = bestLambda, newx = x[test,])
 #baseline null model predictions
 mean(( mean(exp(y[train])) -exp(y.test) )^2)^(1/2)
 ```
-```{r, Ridge Regression plot, echo=FALSE}
+```{r, Ridge Regression plot, echo=FALSE, fig.align = "center", fig.height = 5, fig.width = 7}
 plot(ridge.mod, xvar="lambda")
 legend(1.75, -.125, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.MeadowV", "Exterior1st.BrkFace", "Neighborhood.Crawfor", "Neighborhood.StoneBr"),
        col=c("red","magenta", "black", "red", "green", 69), lty=c(2,1,1,1,1,1), cex=1)
 abline(v = log(bestLambda), col = "red", lwd = 2, lty = 2)
 ```
 
-The best lambda we found is close to 0 and therefore it looks like this model will be close to the full Least Squares model. This is not a huge surprise because we noticed in our subset selection models that a lot of predictors were significant. Also our sample size is a lot larger then the number of predictors 1458 >> 177 so reducing variance may not be a huge concern for us and the increase in bias may be a bigger problem. Below is a comparison in the model accuracies.
+The best lambda we found is close to 0 and therefore it looks like this model will be close to the full Least Squares model. This is not a huge surprise because we noticed in our subset selection models that the Test MSE kept slightly decreasing as we added more variables. Also our sample size is a lot larger then the number of predictors 1458 >> 177 so reducing variance may not be that helpful for us and the increase in bias from shrinking the coefficients may be a bigger problem. Below is a comparison in the model accuracies.
+
+**Model Accuracy**
 
 * **Best Lambda:** 0.044
 * **Test RMSE Ridge:** $21,646.23
@@ -571,8 +610,8 @@ The best lambda we found is close to 0 and therefore it looks like this model wi
 
 The Ridge Regression model and the least squares model perform pretty much identically on a validation set at lamda = 0.044. They both significantly beat the Null Model that only uses the mean of Sale Price to predict Sale Price but essentially they are pretty much the same model.
 
-####Lasso Regression
-The goal of Lasso Regression is similar to Ridge Regression but in Lasso Regression we also perform subset selection. This has the benefit of potentially reducing variance and therefore improving prediction accuracy while also improving interpretibilty. We hope this model will outperform the full Least Squares while also being a lot more interpretible than Ridge Regression. The equation we use to do this is similar to Ridge Regression but now we minimize $RSS +\lambda\sum_{j=1}^p\lvert \beta_j \rvert$. Again we need to find the best lambda and we use the same methods as before.
+#### **Lasso Regression**
+The goal of Lasso Regression is similar to Ridge Regression but in Lasso Regression we also perform subset selection. This has the benefit of potentially reducing variance and therefore improving prediction accuracy while also improving interpretibilty. We hope this model will outperform the full Least Squares while also being a lot more interpretible than Ridge Regression. The equation we use to do this is similar to Ridge Regression but now we minimize $RSS +\lambda\sum_{j=1}^p\lvert \beta_j \rvert$. Again we need to find the best lambda and we use the same Cross Validation methods as before.
 
 
 ```{r, Lasso, include=FALSE, echo=FALSE}
@@ -596,7 +635,7 @@ lasso.coef = predict(lasso.mod, type = "coefficients", s=bestLassoLambda)
 sum(lasso.coef!=0)
 ```
 
-```{r, Lasso Regression plot, echo=FALSE}
+```{r, Lasso Regression plot, echo=FALSE, fig.align = "center", fig.height = 5, fig.width = 7}
 plot(lasso.mod, xvar="lambda")
 legend(-4, -.275, legend=c("Best Lambda", "MSZoning.C (all)", "Neighborhood.MeadowV", "Neighborhood.Crawfor"), col=c("red", 69, "black", "blue" ), lty=c(2,1,1,1), pt.cex=1,  cex = 0.75)
 abline(v = log(bestLassoLambda), col = "red", lwd = 2, lty = 2)
@@ -604,19 +643,36 @@ abline(v = log(bestLassoLambda), col = "red", lwd = 2, lty = 2)
 
 The Lasso model with the lowest cross validation error rate is a model with 71 predictors. This is close to we saw in forward and backward stepwise selection. 
 
+**Model Accuracy**
+
 * **Best Lambda:** 0.0039
 * **Test RMSE Lasso:** $20,248.17
 * **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
 * **Count of Non-Zero Coefficients:** 71
 
-Although this helps with inference and interpretibility because of having fewer variables it doesn't help all that much with prediction. Again the Test RMSE is approximately the same between the Lasso model and the full Least Squares model. Currently this is the best model for both prediction and interpretibility we have.
+This model did outperform all of our previous models (although not by that much) and has the added benefit of subset selection on the predictors. This helps with interpretibility because of having fewer variables. Currently this is the best model for both prediction and interpretibility we have.
 
-##Dimension Reduction Methods
-####Principle Components Regression
+```{r Coefficient Plot, echo=FALSE, include=FALSE}
+# ##Maybe Do not do this!!!!
+# LassoBestCoef = coef(lasso.mod, s = bestLassoLambda)
+# Lasso.coef = LassoBestCoef@x
+# Lasso.coef.values = sort(abs(Lasso.coef[which(Lasso.coef != 0)]), decreasing = TRUE)
+# Lasso.coef.values = Lasso.coef.values[2:11]
+# Lasso.coef.values[1] = -1*Lasso.coef.values[1]
+# #Get top 10 names
+# Lasso.coef.names = c("MSZoning.C", "Test", "test2","test3", "Test4", "test5","test6","Test7", "test8","test9")
+# #Make a better plot using ggplot like above (curved x axis, colors)
+# plot(as.factor(Lasso.coef.names), Lasso.coef.values)
+```
+
+###             Dimension Reduction Methods
+#### **Principle Components Regression**
 The goals of principle components regression is to find principle components of the form  Z = $\sum_{i=1}^n \phi_jX_j$  such that a few principle components can be used to predict the response. The hope is that this will lead to a substantial reduction in variance while only causing a slight increase in bias. Note that each principle component is a linear cobination of all the predictors. We want this method to outperform the Least Squares. This has an advantage over Least Squares in that it will have a lower variance but it will have a higher bias because we are assuming a simpler model. 
 
 We fit a Principle Components Regression model (with scale = TRUE to regularize the data) and used cross validation to determine the optimal number of principal components. Below is a plot of this model fit. After finding the optimal number of components we fit a new model only on a training data set and then used a validation set to assess the accuracy of a PCR model with 10 principle components. Below is a description of the results.
+
+**Model Accuracy**
 
 * **Optimal Number of Principle Components:** 10
 * **Test RMSE PCR:** $27,601.17
@@ -640,17 +696,21 @@ pcr.pred = predict(pcr.fittrain, test.pcr, ncomp = 10)
 mean((exp(pcr.pred) - exp(test.pcr$SalePrice))^2)^(1/2)
 ```
 
-```{r, PCR Plots, echo=FALSE}
-validationplot(pcr.fit, val.type = "MSEP")
+```{r, PCR Plots, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 6}
+validationplot(pcr.fit, val.type = "MSEP", main = "Finding Optimal Number of Principal Components")
 ```
 
-#Moving Beyond Linearity
-The goal of this section was to see if we could beat our Lasso prediction accuracy by fitting more complex functions to the predictors using a Generalized Additive Model and appropriate basis functions. We used the predictors that had Non-Zero coefficients in our best Lasso Model. The equation for the Generalized Additive Model is $y_i = \beta_0+\sum_{j=1}^pf_j(x_ij) + \epsilon_i$. Are hope was that by fitting non-linear functions of the predictors we can increase our models flexibility for some predictors and therefore reduce the overall bias. Unfortunately this did not help a lot. Below is a comparison of our models accuracy. We tried a lot of different basis functions for the predictors and the best cross Validation error rate we acheived was $19,787.60. Below is a graph of the predictor "Year Built" which did appear to imrpove by fitting a Natural Cubic Spline to it. Unfortunately there were not a lot of other variables that improved over their Linear Least Squares fits. 
+##                  Moving Beyond Linearity
+The goal of this section was to see if we could beat our Lasso prediction accuracy by fitting more complex functions to the predictors using a Generalized Additive Model and appropriate basis functions. We used the predictors that had Non-Zero coefficients in our best Lasso Model. The equation for the Generalized Additive Model is $y_i = \beta_0+\sum_{j=1}^pf_j(x_ij) + \epsilon_i$. Are hope was that by fitting non-linear functions of the predictors we can increase our models flexibility for some predictors and therefore reduce the overall bias while not increasing variance too much. This helped a little but not a lot. Below is a comparison of our models accuracy. We tried a lot of different basis functions for the predictors and the best cross Validation error rate we acheived was $19,787.60. Below is a graph of a predictor "Year Built" which did appear to imrpove by fitting a Natural Cubic Spline to it. Unfortunately there were not a lot of other variables that improved over their Linear Least Squares fits.
+
+**Model Accuracy**
 
 * **Test RMSE GAM:** $19,787.60
 * **Test RMSE Lasso:** $20,248.17
 * **Test RMSE Full MLR:** $21,767.80
 * **Test RMSE Null Model:** $79,513.67
+
+For the benefit of interpretibility we decided to try to build a simpler GAM and see if we could narrow down the number of predictors and not loose a statistically significant amount of prediction accuracy. We ran a partial F-test to make sure our reduced model was sufficient (p-value = 2.2e-16). 
 
 ```{r GAM setup, include=FALSE, echo=FALSE}
 set.seed(1)
@@ -740,16 +800,55 @@ GAM.model = gam(SalePrice ~ ns(LotFrontage,3) +
 #Predict and get RMSE
 preds = predict(GAM.model, newdata = test.GAM)
 mean((exp(preds) - exp(test.GAM$SalePrice))^2)^(1/2)
+
+GAM.model2 = lm(SalePrice ~
+                            ns(LotArea,4) +
+                            ns(YearBuilt, 4) +
+                            ns(BsmtFinSF1, 2) +
+                            ns(TotalBsmtSF, 4) +
+                            ns(GrLivArea, 4) +  
+                            ns(OpenPorchSF, 3) +
+                            OverallQual +
+                            OverallCond +
+                            CentralAir +
+                            Functional +
+                            FireplaceQu +
+                            GarageCars +
+                            Neighborhood.Crawfor+
+                            Neighborhood.BrkSide+
+                            Neighborhood.StoneBr+
+                            Exterior1st.BrkFace+
+                            BsmtExposure.Gd+
+                            SaleCondition.Abnorml,
+                            data = train.GAM)
+preds = predict(GAM.model2, newdata = test.GAM)
+mean((exp(preds) - exp(test.GAM$SalePrice))^2)^(1/2)
 ```
-```{r Plot Attempt, echo=FALSE}
+```{r Plot Attempt, echo=FALSE, fig.align = "center", fig.height = 6, fig.width = 7}
 fit.YearBuilt = lm(SalePrice ~ ns(YearBuilt, 3), data = GAM.data)
 YearBuilt.lims = range(GAM.data$YearBuilt)
 YearBuilt.grid = seq(from = YearBuilt.lims[1], to = YearBuilt.lims[2])
 pred = predict(fit.YearBuilt, newdata = list(YearBuilt=YearBuilt.grid), se=T)
-plot(GAM.data$YearBuilt, GAM.data$SalePrice, xlab = "Year Built", ylab = "log(SalePrice)" )
+plot(GAM.data$YearBuilt, GAM.data$SalePrice, xlab = "Year Built", ylab = "log(SalePrice)", col = "azure4" )
 lines(YearBuilt.grid, pred$fit, col ="blue", lwd=2)
 lines(YearBuilt.grid, pred$fit + 2*pred$se, lty="dashed", col = "red")
 lines(YearBuilt.grid, pred$fit - 2*pred$se, lty="dashed", col = "red")
 ```
 
+For the benefit of interpretibility we decided to try to build a simpler GAM and see if we could narrow down the number of predictors and not loose a statistically significant amount of prediction accuracy. We ran a partial F-test to make sure our reduced model was sufficient (actual p-value = 2.2e-16). We were able to get this model down to 18 predictors. Below is a table of the Predictors and their coefficient estimates along with a confidence interval and their P-values.
 
+```{r Predictors, echo = FALSE, fig.align="center"}
+tab_model(GAM.model2)
+```
+
+
+#                                           Conclusion
+The goals of this project were to be able to predict the sale price of a house with reasonable accuracy and find the most important predictors that effect the sale price of a house. We accomplished both of these goals. 
+
+Using a Multiple Linear Regression model we were able to significantly improve prediction accuracy over a baseline Null Model that predicts the mean for every new observation. The baseline Null model accuracy had a RMSE of \$79,513.67. while our Multiple Linear Regression models RMSE was \$21,767.80. This tells us there is a strong relationship between Sale Price and the predictors in our Data. Once we knew this we attempted a bunch of different methods to improve prediction accuracy and try to narrow down the "strongest" predictors. Our Lasso and GAM models ended up being the our best models in terms of prediction accuracy. We were able to get our RMSE down to around \$20,000. Our Lasso model improved prediction accuracy because the reduction in variance outweighed the slight increase in bias. Our GAM model kind of did both. We fit it on a subset of the original 177 predictors but we also allowed for more flexible non-linear fits to some of the predictors and therefore reduced bias and increased variance. In the end the best accuracy we could acheive was a RMSE of \$20,000.
+
+
+Some of the strongest predictors in predicting sale price can be seen in the table above along with how accurate their coefficient estimates are. A lot of the strongest predictors, and their relationship with sale price, is very intuitive. The bigger, newer, higher quality the house the higher the sale price. We saw this in "The Data" section when we checked the predictors correlation with sale price and again in every subset selection method.  We did notice that people in Ames Iowa seem to really like their basements and are willing to pay for them. Joking aside, that also is pretty intuitive. A big finished basement just means a bigger house and therefore an increase in sale price.
+
+
+Overall we learned a little bit about Housing Markets and a lot about Statistical Modeling, R, and trying to make interesting plots in R.
